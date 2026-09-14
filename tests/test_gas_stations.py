@@ -5,6 +5,7 @@ from app.services.google_places import (
     GooglePlacesServiceError,
     sort_stations,
 )
+from app.utils.cost import calculate_estimated_cost
 
 client = TestClient(app)
 
@@ -289,3 +290,35 @@ def test_invalid_limit():
     )
 
     assert response.status_code == 422
+
+def test_best_option_can_choose_closer_station():
+    stations = [
+        {
+            "name": "Cheap but far",
+            "distance_miles": 8.0,
+            "selected_fuel": {
+                "available": True,
+                "price": 2.90,
+            },
+        },
+        {
+            "name": "Closer station",
+            "distance_miles": 1.0,
+            "selected_fuel": {
+                "available": True,
+                "price": 2.95,
+            },
+        },
+    ]
+
+    for station in stations:
+        station["estimated_cost"] = calculate_estimated_cost(
+            price_per_gallon=station["selected_fuel"]["price"],
+            distance_miles=station["distance_miles"],
+            gallons_needed=10,
+            vehicle_mpg=25,
+        )
+
+    result = sort_stations(stations, "best")
+
+    assert result[0]["name"] == "Closer station"

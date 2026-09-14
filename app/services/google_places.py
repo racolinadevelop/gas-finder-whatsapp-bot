@@ -2,6 +2,7 @@ import httpx
 
 from app.config import GOOGLE_MAPS_API_KEY
 from app.utils.distance import calculate_distance_miles
+from app.utils.cost import calculate_estimated_cost
 
 GOOGLE_PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
 
@@ -54,6 +55,20 @@ def sort_stations(stations: list, sort: str) -> list:
                 station["distance_miles"],
             )
         )
+
+    elif sort == "best":
+        stations.sort(
+            key=lambda station: (
+                station["estimated_cost"] is None,
+                (
+                    station["estimated_cost"]["estimated_total_cost"]
+                    if station["estimated_cost"]
+                    else float("inf")
+                ),
+                station["distance_miles"],
+            )
+        )
+
     else:
         stations.sort(key=lambda station: station["distance_miles"])
 
@@ -67,6 +82,8 @@ def search_nearby_gas_stations(
     fuel_type: str = "regular",
     sort: str = "distance",
     limit: int = 10,
+    gallons_needed: float = 10,
+    vehicle_mpg: float = 25,
 ):
     headers = {
         "Content-Type": "application/json",
@@ -171,6 +188,13 @@ def search_nearby_gas_stations(
         if station_latitude is None or station_longitude is None:
             continue
 
+        distance_miles = calculate_distance_miles(
+            latitude,
+            longitude,
+            station_latitude,
+            station_longitude,
+        )
+
         display_name = place.get("displayName", {})
 
         station_name = display_name.get("text", "Unknown gas station")
@@ -197,6 +221,15 @@ def search_nearby_gas_stations(
                 "currency": None,
                 "updated_at": None,
             }
+        estimated_cost = None
+
+        if selected_fuel["available"]:
+            estimated_cost = calculate_estimated_cost(
+                price_per_gallon=selected_fuel["price"],
+                distance_miles=distance_miles,
+                gallons_needed=gallons_needed,
+                vehicle_mpg=vehicle_mpg,
+            )
 
         station = {
             "id": place.get("id"),
@@ -204,14 +237,10 @@ def search_nearby_gas_stations(
             "address": station_address,
             "latitude": station_latitude,
             "longitude": station_longitude,
-            "distance_miles": calculate_distance_miles(
-                latitude,
-                longitude,
-                station_latitude,
-                station_longitude,
-            ),
+            "distance_miles": distance_miles,
             "fuel_prices": parsed_fuel_prices,
             "selected_fuel": selected_fuel,
+            "estimated_cost": estimated_cost,
         }
 
         stations.append(station)
