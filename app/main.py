@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 
+from app.services.google_places import search_nearby_gas_stations
+
 app = FastAPI(
     title="Gas Finder API",
     description="REST API for finding nearby gas stations and comparing fuel prices.",
@@ -15,15 +17,10 @@ def root():
 def get_nearby_gas_stations(
     latitude: float,
     longitude: float,
-    radius: int = 5000,
-    fuel_type: str = "regular",
-    sort: str = "distance"
+    radius: int = 5000
 ):
-    return {
-        "latitude": latitude,
-        "longitude": longitude,
-        "radius": radius,
-        "fuel_type": fuel_type,
-        "sort": sort,
-        "stations": []
-    }
+    return search_nearby_gas_stations(
+        latitude=latitude,
+        longitude=longitude,
+        radius=radius
+    )
