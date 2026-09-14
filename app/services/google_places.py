@@ -13,7 +13,60 @@ class GooglePlacesServiceError(Exception):
         super().__init__(message)
 
 
-def search_nearby_gas_stations(latitude: float, longitude: float, radius: float = 5000):
+def parse_fuel_prices(fuel_prices: list) -> dict:
+    parsed_prices = {}
+
+    for fuel in fuel_prices:
+        fuel_type = fuel.get("type")
+        price_data = fuel.get("price", {})
+
+        units = int(price_data.get("units", 0))
+        nanos = int(price_data.get("nanos", 0))
+
+        price = units + (nanos / 1_000_000_000)
+
+        parsed_prices[fuel_type] = {
+            "price": round(price, 3),
+            "currency": price_data.get("currencyCode", "USD"),
+            "updated_at": fuel.get("updateTime"),
+        }
+
+    return parsed_prices
+
+
+FUEL_TYPE_MAP = {
+    "regular": "REGULAR_UNLEADED",
+    "premium": "PREMIUM",
+    "diesel": "DIESEL",
+}
+
+
+def sort_stations(stations: list, sort: str) -> list:
+    if sort == "price":
+        stations.sort(
+            key=lambda station: (
+                not station["selected_fuel"]["available"],
+                (
+                    station["selected_fuel"]["price"]
+                    if station["selected_fuel"]["available"]
+                    else float("inf")
+                ),
+                station["distance_miles"],
+            )
+        )
+    else:
+        stations.sort(key=lambda station: station["distance_miles"])
+
+    return stations
+
+
+def search_nearby_gas_stations(
+    latitude: float,
+    longitude: float,
+    radius: float = 5000,
+    fuel_type: str = "regular",
+    sort: str = "distance",
+):
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
@@ -21,7 +74,8 @@ def search_nearby_gas_stations(latitude: float, longitude: float, radius: float 
             "places.id,"
             "places.displayName,"
             "places.formattedAddress,"
-            "places.location"
+            "places.location,"
+            "places.fuelOptions"
         ),
     }
 
@@ -122,6 +176,27 @@ def search_nearby_gas_stations(latitude: float, longitude: float, radius: float 
 
         station_address = place.get("formattedAddress", "Address not available")
 
+        fuel_options = place.get("fuelOptions", {})
+        fuel_prices = fuel_options.get("fuelPrices", [])
+        parsed_fuel_prices = parse_fuel_prices(fuel_prices)
+
+        google_fuel_type = FUEL_TYPE_MAP[fuel_type]
+
+        fuel_data = parsed_fuel_prices.get(google_fuel_type)
+
+        if fuel_data:
+            selected_fuel = {
+                "available": True,
+                **fuel_data,
+            }
+        else:
+            selected_fuel = {
+                "available": False,
+                "price": None,
+                "currency": None,
+                "updated_at": None,
+            }
+
         station = {
             "id": place.get("id"),
             "name": station_name,
@@ -134,11 +209,13 @@ def search_nearby_gas_stations(latitude: float, longitude: float, radius: float 
                 station_latitude,
                 station_longitude,
             ),
+            "fuel_prices": parsed_fuel_prices,
+            "selected_fuel": selected_fuel,
         }
 
         stations.append(station)
 
-    stations.sort(key=lambda station: station["distance_miles"])
+    stations = sort_stations(stations, sort)
 
     return {
         "stations": stations,
