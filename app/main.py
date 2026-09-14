@@ -6,6 +6,7 @@ from app.services.google_places import (
     search_nearby_gas_stations,
 )
 
+
 app = FastAPI(
     title="Gas Finder API",
     description="REST API for finding nearby gas stations and comparing fuel prices.",
@@ -25,6 +26,7 @@ def get_nearby_gas_stations(
     radius: int = Query(5000, gt=0, le=50000),
     fuel_type: Literal["regular", "premium", "diesel"] = "regular",
     sort: Literal["distance", "price"] = "distance",
+    limit: int = Query(10, ge=1, le=20),
 ):
     try:
         return search_nearby_gas_stations(
@@ -33,6 +35,7 @@ def get_nearby_gas_stations(
             radius=radius,
             fuel_type=fuel_type,
             sort=sort,
+            limit=limit,
         )
 
     except GooglePlacesServiceError as exc:

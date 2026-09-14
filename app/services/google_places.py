@@ -66,6 +66,7 @@ def search_nearby_gas_stations(
     radius: float = 5000,
     fuel_type: str = "regular",
     sort: str = "distance",
+    limit: int = 10,
 ):
     headers = {
         "Content-Type": "application/json",
@@ -81,7 +82,7 @@ def search_nearby_gas_stations(
 
     payload = {
         "includedTypes": ["gas_station"],
-        "maxResultCount": 5,
+        "maxResultCount": limit,
         "rankPreference": "DISTANCE",
         "locationRestriction": {
             "circle": {

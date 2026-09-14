@@ -213,6 +213,7 @@ def test_sort_stations_by_price():
     assert result[1]["name"] == "Shell"
     assert result[2]["name"] == "BP"
 
+
 def test_sort_stations_by_distance():
     stations = [
         {
@@ -247,6 +248,7 @@ def test_sort_stations_by_distance():
     assert result[1]["name"] == "Shell"
     assert result[2]["name"] == "BP"
 
+
 def test_sort_same_price_uses_distance():
     stations = [
         {
@@ -271,3 +273,19 @@ def test_sort_same_price_uses_distance():
 
     assert result[0]["name"] == "Speedway"
     assert result[1]["name"] == "Shell"
+
+
+def test_invalid_limit():
+    response = client.get(
+        "/api/v1/gas-stations/nearby",
+        params={
+            "latitude": 38.2527,
+            "longitude": -85.7585,
+            "radius": 5000,
+            "fuel_type": "regular",
+            "sort": "distance",
+            "limit": 21,
+        },
+    )
+
+    assert response.status_code == 422
