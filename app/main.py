@@ -5,6 +5,7 @@ from app.services.google_places import (
     GooglePlacesServiceError,
     search_nearby_gas_stations,
 )
+from app.schemas import GasStationsResponse
 
 app = FastAPI(
     title="Gas Finder API",
@@ -18,7 +19,10 @@ def root():
     return {"message": "Gas Finder API is running"}
 
 
-@app.get("/api/v1/gas-stations/nearby")
+@app.get(
+    "/api/v1/gas-stations/nearby",
+    response_model=GasStationsResponse,
+)
 def get_nearby_gas_stations(
     latitude: float = Query(..., ge=-90, le=90),
     longitude: float = Query(..., ge=-180, le=180),
