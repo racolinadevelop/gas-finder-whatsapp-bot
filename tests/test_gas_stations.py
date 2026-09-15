@@ -1,11 +1,12 @@
 from fastapi.testclient import TestClient
-
 from app.main import app
 from app.services.google_places import (
     GooglePlacesServiceError,
     sort_stations,
 )
 from app.utils.cost import calculate_estimated_cost
+from app.services.whatsapp import build_text_reply
+from app.services.whatsapp import build_gas_stations_reply
 
 client = TestClient(app)
 
@@ -291,6 +292,7 @@ def test_invalid_limit():
 
     assert response.status_code == 422
 
+
 def test_best_option_can_choose_closer_station():
     stations = [
         {
@@ -322,3 +324,72 @@ def test_best_option_can_choose_closer_station():
     result = sort_stations(stations, "best")
 
     assert result[0]["name"] == "Closer station"
+
+
+def test_build_text_reply_for_text_message():
+    incoming_message = {
+        "from": "15551234567",
+        "type": "text",
+        "message_id": "wamid.test",
+        "text": "hello",
+    }
+
+    reply = build_text_reply(incoming_message)
+
+    assert reply == (
+        "Hi! 👋\n" "Send me your location and I'll find nearby gas stations for you."
+    )
+
+
+def test_build_text_reply_ignores_non_text_message():
+    incoming_message = {
+        "from": "15551234567",
+        "type": "location",
+        "message_id": "wamid.test",
+        "latitude": 38.25,
+        "longitude": -85.75,
+    }
+
+    reply = build_text_reply(incoming_message)
+
+    assert reply is None
+
+
+def test_build_gas_stations_reply_with_results():
+    result = {
+        "stations": [
+            {
+                "name": "Speedway",
+                "distance_miles": 0.72,
+                "selected_fuel": {
+                    "available": True,
+                    "price": 2.899,
+                },
+            },
+            {
+                "name": "Shell",
+                "distance_miles": 1.14,
+                "selected_fuel": {
+                    "available": True,
+                    "price": 2.999,
+                },
+            },
+        ]
+    }
+
+    reply = build_gas_stations_reply(result)
+
+    assert "Speedway" in reply
+    assert "Shell" in reply
+    assert "$2.899/gal" in reply
+    assert "$2.999/gal" in reply
+    assert "0.72 mi" in reply
+    assert "1.14 mi" in reply
+
+
+def test_build_gas_stations_reply_without_results():
+    result = {"stations": []}
+
+    reply = build_gas_stations_reply(result)
+
+    assert "couldn't find gas stations" in reply

@@ -1,11 +1,22 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from typing import Literal
 
 from app.services.google_places import (
     GooglePlacesServiceError,
     search_nearby_gas_stations,
 )
-from app.schemas import GasStationsResponse
+from app.schemas import GasStationsResponse, WhatsAppMessageRequest
+
+from app.services.whatsapp import (
+    WhatsAppServiceError,
+    build_text_reply,
+    send_text_message,
+    extract_incoming_message,
+    build_gas_stations_reply,
+)
+
+from app.config import WHATSAPP_VERIFY_TOKEN
+from fastapi.responses import PlainTextResponse
 
 app = FastAPI(
     title="Gas Finder API",
@@ -50,3 +61,101 @@ def get_nearby_gas_stations(
             status_code=exc.status_code,
             detail=exc.message,
         ) from exc
+
+
+@app.post("/api/v1/whatsapp/send-message")
+def send_whatsapp_message(payload: WhatsAppMessageRequest):
+    try:
+        return send_text_message(
+            to=payload.to,
+            message=payload.message,
+        )
+
+    except WhatsAppServiceError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=str(exc),
+        ) from exc
+
+
+@app.get(
+    "/api/v1/whatsapp/webhook",
+    response_class=PlainTextResponse,
+)
+def verify_whatsapp_webhook(
+    hub_mode: str = Query(..., alias="hub.mode"),
+    hub_verify_token: str = Query(..., alias="hub.verify_token"),
+    hub_challenge: str = Query(..., alias="hub.challenge"),
+):
+    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+        return hub_challenge
+
+    raise HTTPException(
+        status_code=403,
+        detail="Invalid webhook verification token.",
+    )
+
+
+@app.post("/api/v1/whatsapp/webhook")
+async def receive_whatsapp_webhook(request: Request):
+    payload = await request.json()
+
+    incoming_message = extract_incoming_message(payload)
+
+    if not incoming_message:
+        print("WhatsApp webhook event without a user message.")
+        return {"status": "ok"}
+
+    print("Incoming WhatsApp message:")
+    print(incoming_message)
+
+    sender = incoming_message["from"]
+    message_type = incoming_message["type"]
+
+    # Text message
+    if message_type == "text":
+        reply = build_text_reply(incoming_message)
+
+        if reply:
+            try:
+                send_text_message(
+                    to=sender,
+                    message=reply,
+                )
+            except WhatsAppServiceError as exc:
+                print(f"Unable to send WhatsApp reply: {exc}")
+
+    # Location message
+    elif message_type == "location":
+        latitude = incoming_message.get("latitude")
+        longitude = incoming_message.get("longitude")
+
+        if latitude is None or longitude is None:
+            return {"status": "ok"}
+
+        try:
+            result = search_nearby_gas_stations(
+                latitude=latitude,
+                longitude=longitude,
+                radius=5000,
+                fuel_type="regular",
+                sort="best",
+                limit=5,
+                gallons_needed=10,
+                vehicle_mpg=25,
+            )
+
+            reply = build_gas_stations_reply(result)
+
+            send_text_message(
+                to=sender,
+                message=reply,
+            )
+
+        except GooglePlacesServiceError as exc:
+            print(f"Unable to search gas stations: {exc}")
+
+        except WhatsAppServiceError as exc:
+            print(f"Unable to send WhatsApp reply: {exc}")
+
+    return {"status": "ok"}

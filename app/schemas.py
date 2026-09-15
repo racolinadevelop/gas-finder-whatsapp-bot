@@ -38,3 +38,8 @@ class GasStationsResponse(BaseModel):
     stations: list[GasStation]
     count: int
     message: str
+
+
+class WhatsAppMessageRequest(BaseModel):
+    to: str
+    message: str
