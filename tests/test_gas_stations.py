@@ -5,8 +5,11 @@ from app.services.google_places import (
     sort_stations,
 )
 from app.utils.cost import calculate_estimated_cost
-from app.services.whatsapp import build_text_reply
-from app.services.whatsapp import build_gas_stations_reply
+from app.services.whatsapp import (
+    build_text_reply,
+    build_gas_stations_reply,
+    parse_search_preferences,
+)
 
 client = TestClient(app)
 
@@ -393,3 +396,45 @@ def test_build_gas_stations_reply_without_results():
     reply = build_gas_stations_reply(result)
 
     assert "couldn't find gas stations" in reply
+
+
+def test_parse_search_preferences_diesel_cheapest():
+    result = parse_search_preferences("diesel cheapest")
+
+    assert result == {
+        "fuel_type": "diesel",
+        "sort": "price",
+    }
+
+
+def test_parse_search_preferences_premium_closest():
+    result = parse_search_preferences("premium closest")
+
+    assert result == {
+        "fuel_type": "premium",
+        "sort": "distance",
+    }
+
+
+def test_parse_search_preferences_regular_best():
+    result = parse_search_preferences("regular best")
+
+    assert result == {
+        "fuel_type": "regular",
+        "sort": "best",
+    }
+
+
+def test_parse_search_preferences_case_insensitive():
+    result = parse_search_preferences("DIESEL CHEAPEST")
+
+    assert result == {
+        "fuel_type": "diesel",
+        "sort": "price",
+    }
+
+
+def test_parse_search_preferences_empty_text():
+    result = parse_search_preferences("")
+
+    assert result == {}

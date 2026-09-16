@@ -132,3 +132,41 @@ def build_gas_stations_reply(result: dict) -> str:
         )
 
     return "\n\n".join(lines)
+
+
+def parse_search_preferences(text: str) -> dict:
+    """
+    Extract gas search preferences from a WhatsApp text message.
+
+    Examples:
+        "diesel cheapest"
+        -> {"fuel_type": "diesel", "sort": "price"}
+
+        "premium closest"
+        -> {"fuel_type": "premium", "sort": "distance"}
+    """
+
+    preferences = {}
+
+    if not text:
+        return preferences
+
+    words = text.lower().strip().split()
+
+    # Fuel type
+    if "regular" in words:
+        preferences["fuel_type"] = "regular"
+    elif "premium" in words:
+        preferences["fuel_type"] = "premium"
+    elif "diesel" in words:
+        preferences["fuel_type"] = "diesel"
+
+    # Sort option
+    if "closest" in words:
+        preferences["sort"] = "distance"
+    elif "cheapest" in words:
+        preferences["sort"] = "price"
+    elif "best" in words:
+        preferences["sort"] = "best"
+
+    return preferences

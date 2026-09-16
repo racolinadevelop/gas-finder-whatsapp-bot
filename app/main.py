@@ -13,6 +13,7 @@ from app.services.whatsapp import (
     send_text_message,
     extract_incoming_message,
     build_gas_stations_reply,
+    parse_search_preferences,
 )
 
 from app.config import WHATSAPP_VERIFY_TOKEN
@@ -23,6 +24,8 @@ app = FastAPI(
     description="REST API for finding nearby gas stations and comparing fuel prices.",
     version="0.1.0",
 )
+
+pending_search_preferences = {}
 
 
 @app.get("/")
@@ -114,7 +117,35 @@ async def receive_whatsapp_webhook(request: Request):
 
     # Text message
     if message_type == "text":
-        reply = build_text_reply(incoming_message)
+        text = incoming_message.get("text", "")
+
+        parsed_preferences = parse_search_preferences(text)
+
+        if parsed_preferences:
+            preferences = {
+                "fuel_type": "regular",
+                "sort": "best",
+            }
+
+            preferences.update(parsed_preferences)
+
+            pending_search_preferences[sender] = preferences
+
+            sort_names = {
+                "distance": "closest",
+                "price": "cheapest",
+                "best": "best",
+            }
+
+            reply = (
+                "✅ Search preferences saved.\n\n"
+                f"⛽ Fuel: {preferences['fuel_type'].title()}\n"
+                f"🔎 Sort: {sort_names[preferences['sort']].title()}\n\n"
+                "Now send me your location 📍"
+            )
+
+        else:
+            reply = build_text_reply(incoming_message)
 
         if reply:
             try:
@@ -123,7 +154,7 @@ async def receive_whatsapp_webhook(request: Request):
                     message=reply,
                 )
             except WhatsAppServiceError as exc:
-                print(f"Unable to send WhatsApp reply: {exc}")
+                print(f"Could not send WhatsApp reply: {exc}")
 
     # Location message
     elif message_type == "location":
@@ -134,12 +165,19 @@ async def receive_whatsapp_webhook(request: Request):
             return {"status": "ok"}
 
         try:
+            preferences = pending_search_preferences.pop(
+                sender,
+                {
+                    "fuel_type": "regular",
+                    "sort": "best",
+                },
+            )
             result = search_nearby_gas_stations(
                 latitude=latitude,
                 longitude=longitude,
                 radius=5000,
-                fuel_type="regular",
-                sort="best",
+                fuel_type=preferences["fuel_type"],
+                sort=preferences["sort"],
                 limit=5,
                 gallons_needed=10,
                 vehicle_mpg=25,
