@@ -1,27 +1,69 @@
 # Gas Finder WhatsApp Bot
 
-A backend project built with Python and FastAPI that helps users find nearby gas stations, compare available fuel prices, and identify the best option based on distance and estimated travel cost.
+A backend project built with Python and FastAPI that helps users find nearby gas stations, compare available fuel prices, and receive the results directly through WhatsApp.
 
-The long-term goal is to connect this REST API to a WhatsApp bot so users can share their location and receive nearby fuel options directly in WhatsApp.
+The application is connected to the Meta WhatsApp Business Platform and uses Google Places API (New) to retrieve real gas station information.
+
+## Live API
+
+Production backend:
+
+```text
+https://gas-finder-whatsapp-bot-production.up.railway.app
+```
+
+Swagger documentation:
+
+```text
+https://gas-finder-whatsapp-bot-production.up.railway.app/docs
+```
+
+## Current Architecture
+
+```text
+WhatsApp User
+      ↓
+Meta WhatsApp Business Platform
+      ↓
+Railway
+      ↓
+FastAPI
+      ↓
+Google Places API
+      ↓
+Gas station results
+      ↓
+WhatsApp response
+```
 
 ## Current Features
 
 - Search nearby gas stations using latitude and longitude
-- Retrieve gas station names, addresses, and coordinates
-- Calculate approximate distance in miles
-- Retrieve available fuel prices from Google Places
+- Receive user location directly from WhatsApp
+- Retrieve real gas station information from Google Places
+- Retrieve available fuel prices
 - Support:
   - Regular
   - Premium
   - Diesel
-- Sort results by:
+- Calculate approximate distance in miles
+- Sort gas stations by:
   - Distance
   - Price
   - Best estimated option
-- Handle stations without fuel prices
-- Validate query parameters
+- Estimate travel cost based on:
+  - Fuel price
+  - Distance
+  - Gallons needed
+  - Vehicle MPG
+- Handle stations without available fuel prices
+- Validate API query parameters
 - Handle Google Places errors and timeouts
-- Automated tests with pytest
+- Receive WhatsApp webhook events
+- Detect text and location messages
+- Send automatic WhatsApp replies
+- Deployed on Railway with a stable public URL
+- Automated testing with pytest
 - Interactive API documentation with Swagger
 
 ## Technologies
@@ -32,6 +74,8 @@ The long-term goal is to connect this REST API to a WhatsApp bot so users can sh
 - Pydantic
 - HTTPX
 - Google Places API (New)
+- Meta WhatsApp Business Platform
+- Railway
 - python-dotenv
 - pytest
 - Git
@@ -46,18 +90,23 @@ gas-finder-whatsapp-bot/
 │   ├── main.py
 │   ├── schemas.py
 │   ├── services/
+│   │   ├── google_places.py
+│   │   └── whatsapp.py
 │   └── utils/
 ├── docs/
 │   ├── API_USAGE.md
-│   └── GOOGLE_PLACES_SETUP.md
+│   ├── GOOGLE_PLACES_SETUP.md
+│   ├── PRIVACY_POLICY.md
+│   └── WHATSAPP_CLOUD_SETUP.md
 ├── tests/
 ├── .env.example
 ├── .gitignore
+├── railway.toml
 ├── README.md
 └── requirements.txt
 ```
 
-## Installation
+## Local Installation
 
 Clone the repository:
 
@@ -97,39 +146,41 @@ Create your local environment file:
 cp .env.example .env
 ```
 
-Then add your Google Maps API key:
+Configure:
 
 ```env
-GOOGLE_MAPS_API_KEY=YOUR_REAL_API_KEY
+GOOGLE_MAPS_API_KEY=
+
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_BUSINESS_ACCOUNT_ID=
+WHATSAPP_API_VERSION=
+WHATSAPP_VERIFY_TOKEN=
 ```
 
-Never commit your `.env` file.
+Never commit `.env`.
 
-For full Google Cloud configuration instructions, see:
+## Run Locally
 
-[Google Places Setup](docs/GOOGLE_PLACES_SETUP.md)
-
-## Run the API
-
-Start the FastAPI development server:
+Start FastAPI:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-Open Swagger:
+Local Swagger:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-## Main Endpoint
+## Main Gas Station Endpoint
 
 ```http
 GET /api/v1/gas-stations/nearby
 ```
 
-Main parameters include:
+Supported parameters:
 
 ```text
 latitude
@@ -142,66 +193,199 @@ gallons_needed
 vehicle_mpg
 ```
 
-For complete API documentation, examples, validation rules, and error responses, see:
+### Fuel Types
 
-[API Usage Guide](docs/API_USAGE.md)
+```text
+regular
+premium
+diesel
+```
 
-## Sorting Options
+### Sorting Options
 
-### Distance
+```text
+distance
+price
+best
+```
 
-Returns the closest stations first.
+## WhatsApp Webhook
 
-### Price
+Webhook verification:
 
-Returns the stations with the lowest available fuel price first.
+```http
+GET /api/v1/whatsapp/webhook
+```
 
-Stations without price information are placed at the end.
+Incoming WhatsApp events:
 
-### Best
+```http
+POST /api/v1/whatsapp/webhook
+```
 
-Estimates the total cost of choosing each gas station using:
+Production callback URL:
 
-- fuel price
-- distance
-- round-trip travel
-- gallons needed
-- vehicle MPG
+```text
+https://gas-finder-whatsapp-bot-production.up.railway.app/api/v1/whatsapp/webhook
+```
 
-This helps avoid recommending a station that is slightly cheaper but much farther away.
+## Current WhatsApp Flow
 
-## Testing
+When the user sends a text message:
 
-Run the automated test suite with:
+```text
+User
+ ↓
+"hello"
+ ↓
+Bot asks for location
+```
+
+When the user shares a location:
+
+```text
+WhatsApp location
+      ↓
+FastAPI webhook
+      ↓
+Latitude + longitude
+      ↓
+Google Places
+      ↓
+Gas stations
+      ↓
+Price + distance + best calculation
+      ↓
+Formatted WhatsApp message
+      ↓
+User
+```
+
+## Example Bot Response
+
+```text
+⛽ Nearby gas stations
+
+1. Example Station
+   💵 $2.899/gal
+   📍 0.72 mi
+
+2. Example Station
+   💵 $2.999/gal
+   📍 1.14 mi
+```
+
+## Automated Tests
+
+Run:
 
 ```bash
 python -m pytest -v
 ```
 
-The test suite covers validation, empty results, Google Places failures, price sorting, distance sorting, and best-option logic.
+The test suite covers:
 
-## Important Limitation
+- coordinate validation
+- search limit validation
+- empty search results
+- Google Places timeouts
+- authentication errors
+- rate limits
+- connection errors
+- sorting by distance
+- sorting by price
+- price tie breaking
+- best-option calculation
+- WhatsApp text replies
+- WhatsApp gas station message formatting
 
-The current MVP calculates distance using geographic coordinates.
+## Documentation
 
-This is straight-line distance, not actual driving distance.
+Google Places setup:
 
-A future version may integrate a routing service for more accurate travel calculations.
+[Google Places Setup](docs/GOOGLE_PLACES_SETUP.md)
+
+API usage:
+
+[API Usage Guide](docs/API_USAGE.md)
+
+WhatsApp Cloud API setup:
+
+[WhatsApp Cloud Setup](docs/WHATSAPP_CLOUD_SETUP.md)
+
+Privacy policy:
+
+[Privacy Policy](docs/PRIVACY_POLICY.md)
+
+## Deployment
+
+The production backend is hosted on Railway.
+
+Railway starts the application with:
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+The configuration is defined in:
+
+```text
+railway.toml
+```
+
+Production credentials are stored using Railway environment variables.
+
+Cloudflare Quick Tunnel was used during early development but is no longer required for production.
+
+## Current Production Status
+
+```text
+Google Places API ✅
+FastAPI REST API ✅
+Fuel prices ✅
+Distance calculation ✅
+Best-option calculation ✅
+Error handling ✅
+Automated tests ✅
+WhatsApp Cloud API ✅
+Incoming webhooks ✅
+Location messages ✅
+Automatic WhatsApp replies ✅
+System User Access Token ✅
+Railway deployment ✅
+Stable production URL ✅
+```
+
+## Current Limitations
+
+The current MVP calculates geographic straight-line distance.
+
+It does not yet calculate actual driving distance.
+
+The bot currently uses default search preferences when the user sends a location.
+
+Future versions will allow the user to configure these preferences directly through WhatsApp.
 
 ## Roadmap
 
 Planned features include:
 
-- WhatsApp Cloud API integration
-- WhatsApp location sharing
-- User commands for fuel type and sorting
+- WhatsApp commands:
+  - regular
+  - premium
+  - diesel
+  - closest
+  - cheapest
+  - best
+- User preferences
+- Actual driving distance
 - PostgreSQL database
 - Search history
 - Favorite gas stations
-- Price alerts
-- Actual driving distance
+- Fuel price alerts
+- Improved WhatsApp conversational flow
 - Docker
-- Production deployment
+- Additional production monitoring
 
 ## Security
 
@@ -209,10 +393,12 @@ Never commit:
 
 - `.env`
 - API keys
-- passwords
+- WhatsApp access tokens
 - private credentials
 
-API keys should be stored using environment variables and restricted in Google Cloud.
+Use environment variables for all secrets.
+
+If a credential is exposed accidentally, rotate it immediately.
 
 ## Status
 
