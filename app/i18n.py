@@ -1,8 +1,10 @@
 TRANSLATIONS = {
     "en": {
-        "choose_language": (
-            "🌎 Choose your language\n"
-            "Selecciona tu idioma"
+       "choose_language": (
+            "👋 Hi! Welcome to Gas Finder.\n"
+            "To continue, please choose your preferred language.\n\n"
+            "👋 ¡Hola! Bienvenido a Gas Finder.\n"
+            "Para continuar, por favor selecciona tu idioma preferido."
         ),
 
         "welcome": (
@@ -74,8 +76,10 @@ TRANSLATIONS = {
 
     "es": {
         "choose_language": (
-            "🌎 Choose your language\n"
-            "Selecciona tu idioma"
+            "👋 Hi! Welcome to Gas Finder.\n"
+            "To continue, please choose your preferred language.\n\n"
+            "👋 ¡Hola! Bienvenido a Gas Finder.\n"
+            "Para continuar, por favor selecciona tu idioma preferido."
         ),
 
         "welcome": (
