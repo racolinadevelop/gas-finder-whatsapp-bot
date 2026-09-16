@@ -19,6 +19,7 @@ from app.services.whatsapp import (
 
 from app.config import WHATSAPP_VERIFY_TOKEN
 from fastapi.responses import PlainTextResponse
+from app.i18n import t
 
 app = FastAPI(
     title="Gas Finder API",
@@ -135,30 +136,21 @@ async def receive_whatsapp_webhook(request: Request):
             try:
                 send_reply_buttons(
                     to=sender,
-                    body_text=(
-                        "👋 Hi! Welcome to Gas Finder!\n\n"
-                        "I can help you find nearby gas stations "
-                        "and compare fuel prices.\n\n"
-                        "⛽ What type of fuel are you looking for?"
-                    ),
+                    body_text=t("en", "choose_language"),
                     buttons=[
                         {
-                            "id": "fuel_regular",
-                            "title": "Regular",
+                            "id": "lang_en",
+                            "title": "English",
                         },
                         {
-                            "id": "fuel_premium",
-                            "title": "Premium",
-                        },
-                        {
-                            "id": "fuel_diesel",
-                            "title": "Diesel",
+                            "id": "lang_es",
+                            "title": "Español",
                         },
                     ],
                 )
 
             except WhatsAppServiceError as exc:
-                print(f"Could not send WhatsApp buttons: {exc}")
+                print(f"Could not send language buttons: {exc}")
 
             return {"status": "ok"}
 
@@ -203,6 +195,11 @@ async def receive_whatsapp_webhook(request: Request):
     elif message_type == "interactive":
         button_id = incoming_message.get("button_id", "")
 
+        language_buttons = {
+            "lang_en": "en",
+            "lang_es": "es",
+        }
+
         fuel_buttons = {
             "fuel_regular": "regular",
             "fuel_premium": "premium",
@@ -215,46 +212,132 @@ async def receive_whatsapp_webhook(request: Request):
             "sort_best": "best",
         }
 
-        if button_id in fuel_buttons:
-            fuel_type = fuel_buttons[button_id]
+        # Language selection
+        if button_id in language_buttons:
+            language = language_buttons[button_id]
 
             pending_search_preferences[sender] = {
-                "fuel_type": fuel_type,
+                "language": language,
+                "fuel_type": "regular",
                 "sort": "best",
+            }
+
+            fuel_titles = {
+                "en": {
+                    "regular": "Regular",
+                    "premium": "Premium",
+                    "diesel": "Diesel",
+                },
+                "es": {
+                    "regular": "Regular",
+                    "premium": "Premium",
+                    "diesel": "Diésel",
+                },
             }
 
             try:
                 send_reply_buttons(
                     to=sender,
                     body_text=(
-                        f"⛽ {fuel_type.title()} selected.\n\n"
-                        "How would you like me to find your gas station?"
+                        f"{t(language, 'welcome')}\n\n" f"{t(language, 'choose_fuel')}"
                     ),
                     buttons=[
                         {
-                            "id": "sort_distance",
-                            "title": "Closest",
+                            "id": "fuel_regular",
+                            "title": fuel_titles[language]["regular"],
                         },
                         {
-                            "id": "sort_price",
-                            "title": "Cheapest",
+                            "id": "fuel_premium",
+                            "title": fuel_titles[language]["premium"],
                         },
                         {
-                            "id": "sort_best",
-                            "title": "Best",
+                            "id": "fuel_diesel",
+                            "title": fuel_titles[language]["diesel"],
                         },
                     ],
                 )
 
             except WhatsAppServiceError as exc:
-                print(f"Could not send WhatsApp buttons: {exc}")
+                print(f"Could not send fuel buttons: {exc}")
 
+        # Fuel selection
+        elif button_id in fuel_buttons:
+            fuel_type = fuel_buttons[button_id]
+
+            preferences = pending_search_preferences.get(
+                sender,
+                {
+                    "language": "en",
+                    "fuel_type": "regular",
+                    "sort": "best",
+                },
+            )
+
+            preferences["fuel_type"] = fuel_type
+            pending_search_preferences[sender] = preferences
+
+            language = preferences["language"]
+
+            fuel_names = {
+                "en": {
+                    "regular": "Regular",
+                    "premium": "Premium",
+                    "diesel": "Diesel",
+                },
+                "es": {
+                    "regular": "Regular",
+                    "premium": "Premium",
+                    "diesel": "Diésel",
+                },
+            }
+
+            sort_titles = {
+                "en": {
+                    "distance": "Closest",
+                    "price": "Cheapest",
+                    "best": "Best",
+                },
+                "es": {
+                    "distance": "Más cerca",
+                    "price": "Más barato",
+                    "best": "Mejor",
+                },
+            }
+
+            try:
+                send_reply_buttons(
+                    to=sender,
+                    body_text=(
+                        f"{t(language, 'fuel_selected', fuel=fuel_names[language][fuel_type])}\n\n"
+                        f"{t(language, 'choose_sort')}"
+                    ),
+                    buttons=[
+                        {
+                            "id": "sort_distance",
+                            "title": sort_titles[language]["distance"],
+                        },
+                        {
+                            "id": "sort_price",
+                            "title": sort_titles[language]["price"],
+                        },
+                        {
+                            "id": "sort_best",
+                            "title": sort_titles[language]["best"],
+                        },
+                    ],
+                )
+
+            except WhatsAppServiceError as exc:
+                print(f"Could not send sort buttons: {exc}")
+
+        # Sort selection
         elif button_id in sort_buttons:
             sort_option = sort_buttons[button_id]
 
             preferences = pending_search_preferences.get(
                 sender,
                 {
+                    "language": "en",
                     "fuel_type": "regular",
                     "sort": "best",
                 },
@@ -263,20 +346,42 @@ async def receive_whatsapp_webhook(request: Request):
             preferences["sort"] = sort_option
             pending_search_preferences[sender] = preferences
 
+            language = preferences["language"]
+
+            fuel_names = {
+                "en": {
+                    "regular": "Regular",
+                    "premium": "Premium",
+                    "diesel": "Diesel",
+                },
+                "es": {
+                    "regular": "Regular",
+                    "premium": "Premium",
+                    "diesel": "Diésel",
+                },
+            }
+
             sort_names = {
-                "distance": "Closest",
-                "price": "Cheapest",
-                "best": "Best",
+                "en": {
+                    "distance": "Closest",
+                    "price": "Cheapest",
+                    "best": "Best",
+                },
+                "es": {
+                    "distance": "Más cerca",
+                    "price": "Más barato",
+                    "best": "Mejor opción",
+                },
             }
 
             try:
                 send_text_message(
                     to=sender,
-                    message=(
-                        "✅ Search preferences saved.\n\n"
-                        f"⛽ Fuel: {preferences['fuel_type'].title()}\n"
-                        f"🔎 Sort: {sort_names[sort_option]}\n\n"
-                        "📍 Now send me your location."
+                    message=t(
+                        language,
+                        "preferences_saved",
+                        fuel=fuel_names[language][preferences["fuel_type"]],
+                        sort=sort_names[language][sort_option],
                     ),
                 )
 

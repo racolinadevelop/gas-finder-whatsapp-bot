@@ -13,6 +13,7 @@ from app.services.whatsapp import (
     WhatsAppServiceError,
     extract_incoming_message,
 )
+from app.i18n import t
 
 client = TestClient(app)
 
@@ -659,6 +660,7 @@ def test_whatsapp_button_flow(monkeypatch):
     assert response.status_code == 200
 
     assert main_module.pending_search_preferences[sender] == {
+        "language": "en",
         "fuel_type": "diesel",
         "sort": "best",
     }
@@ -702,11 +704,224 @@ def test_whatsapp_button_flow(monkeypatch):
     assert response.status_code == 200
 
     assert main_module.pending_search_preferences[sender] == {
+        "language": "en",
         "fuel_type": "diesel",
         "sort": "price",
     }
 
     assert "Diesel" in sent_text_messages[0]["message"]
     assert "Cheapest" in sent_text_messages[0]["message"]
+
+    main_module.pending_search_preferences.clear()
+
+
+def test_translation_english():
+    result = t("en", "choose_fuel")
+
+    assert result == "⛽ What type of fuel are you looking for?"
+
+
+def test_translation_spanish():
+    result = t("es", "choose_fuel")
+
+    assert result == "⛽ ¿Qué tipo de combustible buscas?"
+
+
+def test_translation_with_variables():
+    result = t(
+        "es",
+        "preferences_saved",
+        fuel="Diésel",
+        sort="Más barato",
+    )
+
+    assert "Diésel" in result
+    assert "Más barato" in result
+
+
+def test_translation_falls_back_to_english():
+    result = t("fr", "choose_fuel")
+
+    assert result == "⛽ What type of fuel are you looking for?"
+
+
+def test_whatsapp_spanish_button_flow(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as main_module
+
+    client = TestClient(main_module.app)
+
+    sent_button_messages = []
+    sent_text_messages = []
+
+    def fake_send_reply_buttons(to, body_text, buttons):
+        sent_button_messages.append(
+            {
+                "to": to,
+                "body_text": body_text,
+                "buttons": buttons,
+            }
+        )
+        return {"messages": [{"id": "wamid.buttons"}]}
+
+    def fake_send_text_message(to, message):
+        sent_text_messages.append(
+            {
+                "to": to,
+                "message": message,
+            }
+        )
+        return {"messages": [{"id": "wamid.text"}]}
+
+    monkeypatch.setattr(
+        main_module,
+        "send_reply_buttons",
+        fake_send_reply_buttons,
+    )
+
+    monkeypatch.setattr(
+        main_module,
+        "send_text_message",
+        fake_send_text_message,
+    )
+
+    main_module.pending_search_preferences.clear()
+
+    sender = "15551234567"
+
+    # 1. Select Spanish
+    spanish_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.spanish",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "lang_es",
+                                            "title": "Español",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=spanish_payload,
+    )
+
+    assert response.status_code == 200
+
+    assert main_module.pending_search_preferences[sender] == {
+        "language": "es",
+        "fuel_type": "regular",
+        "sort": "best",
+    }
+
+    assert "¿Qué tipo de combustible buscas?" in (sent_button_messages[0]["body_text"])
+
+    assert sent_button_messages[0]["buttons"][2]["title"] == "Diésel"
+
+    # 2. Select Diesel
+    diesel_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.diesel",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "fuel_diesel",
+                                            "title": "Diésel",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=diesel_payload,
+    )
+
+    assert response.status_code == 200
+
+    assert main_module.pending_search_preferences[sender] == {
+        "language": "es",
+        "fuel_type": "diesel",
+        "sort": "best",
+    }
+
+    assert sent_button_messages[1]["buttons"][0]["title"] == "Más cerca"
+    assert sent_button_messages[1]["buttons"][1]["title"] == "Más barato"
+    assert sent_button_messages[1]["buttons"][2]["title"] == "Mejor"
+
+    # 3. Select Cheapest
+    cheapest_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.cheapest",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "sort_price",
+                                            "title": "Más barato",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=cheapest_payload,
+    )
+
+    assert response.status_code == 200
+
+    assert main_module.pending_search_preferences[sender] == {
+        "language": "es",
+        "fuel_type": "diesel",
+        "sort": "price",
+    }
+
+    assert "Diésel" in sent_text_messages[0]["message"]
+    assert "Más barato" in sent_text_messages[0]["message"]
+    assert "Ahora envíame tu ubicación" in sent_text_messages[0]["message"]
 
     main_module.pending_search_preferences.clear()
