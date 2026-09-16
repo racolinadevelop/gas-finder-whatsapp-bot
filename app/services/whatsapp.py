@@ -60,6 +60,96 @@ def send_text_message(to: str, message: str) -> dict:
     return response.json()
 
 
+def send_reply_buttons(
+    to: str,
+    body_text: str,
+    buttons: list[dict],
+) -> dict:
+    """
+    Send an interactive WhatsApp message with reply buttons.
+
+    Example buttons:
+    [
+        {"id": "fuel_regular", "title": "Regular"},
+        {"id": "fuel_premium", "title": "Premium"},
+        {"id": "fuel_diesel", "title": "Diesel"},
+    ]
+    """
+
+    if not WHATSAPP_ACCESS_TOKEN:
+        raise WhatsAppServiceError("WHATSAPP_ACCESS_TOKEN is not configured")
+
+    if not WHATSAPP_PHONE_NUMBER_ID:
+        raise WhatsAppServiceError("WHATSAPP_PHONE_NUMBER_ID is not configured")
+
+    if not buttons:
+        raise WhatsAppServiceError("At least one button is required")
+
+    if len(buttons) > 3:
+        raise WhatsAppServiceError(
+            "WhatsApp reply button messages support a maximum of 3 buttons"
+        )
+
+    url = (
+        f"https://graph.facebook.com/"
+        f"{WHATSAPP_API_VERSION}/"
+        f"{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    )
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {
+                "text": body_text,
+            },
+            "action": {
+                "buttons": [
+                    {
+                        "type": "reply",
+                        "reply": {
+                            "id": button["id"],
+                            "title": button["title"],
+                        },
+                    }
+                    for button in buttons
+                ]
+            },
+        },
+    }
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = httpx.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=15.0,
+        )
+
+        response.raise_for_status()
+
+    except httpx.TimeoutException as exc:
+        raise WhatsAppServiceError("WhatsApp API request timed out") from exc
+
+    except httpx.HTTPStatusError as exc:
+        raise WhatsAppServiceError(
+            f"WhatsApp API returned HTTP " f"{exc.response.status_code}"
+        ) from exc
+
+    except httpx.RequestError as exc:
+        raise WhatsAppServiceError("Could not connect to WhatsApp API") from exc
+
+    return response.json()
+
+
 def extract_incoming_message(payload: dict):
     try:
         value = payload["entry"][0]["changes"][0]["value"]
@@ -88,6 +178,18 @@ def extract_incoming_message(payload: dict):
 
             result["latitude"] = location.get("latitude")
             result["longitude"] = location.get("longitude")
+
+        elif message_type == "interactive":
+            interactive = message.get("interactive", {})
+            interactive_type = interactive.get("type")
+
+            result["interactive_type"] = interactive_type
+
+            if interactive_type == "button_reply":
+                button_reply = interactive.get("button_reply", {})
+
+                result["button_id"] = button_reply.get("id")
+                result["button_title"] = button_reply.get("title")
 
         return result
 

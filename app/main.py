@@ -14,6 +14,7 @@ from app.services.whatsapp import (
     extract_incoming_message,
     build_gas_stations_reply,
     parse_search_preferences,
+    send_reply_buttons,
 )
 
 from app.config import WHATSAPP_VERIFY_TOKEN
@@ -118,6 +119,48 @@ async def receive_whatsapp_webhook(request: Request):
     # Text message
     if message_type == "text":
         text = incoming_message.get("text", "")
+        normalized_text = text.lower().strip()
+
+        greetings = {
+            "hi",
+            "hello",
+            "hey",
+            "hola",
+            "good morning",
+            "good afternoon",
+            "good evening",
+        }
+
+        if normalized_text in greetings:
+            try:
+                send_reply_buttons(
+                    to=sender,
+                    body_text=(
+                        "👋 Hi! Welcome to Gas Finder!\n\n"
+                        "I can help you find nearby gas stations "
+                        "and compare fuel prices.\n\n"
+                        "⛽ What type of fuel are you looking for?"
+                    ),
+                    buttons=[
+                        {
+                            "id": "fuel_regular",
+                            "title": "Regular",
+                        },
+                        {
+                            "id": "fuel_premium",
+                            "title": "Premium",
+                        },
+                        {
+                            "id": "fuel_diesel",
+                            "title": "Diesel",
+                        },
+                    ],
+                )
+
+            except WhatsAppServiceError as exc:
+                print(f"Could not send WhatsApp buttons: {exc}")
+
+            return {"status": "ok"}
 
         parsed_preferences = parse_search_preferences(text)
 
@@ -153,6 +196,90 @@ async def receive_whatsapp_webhook(request: Request):
                     to=sender,
                     message=reply,
                 )
+            except WhatsAppServiceError as exc:
+                print(f"Could not send WhatsApp reply: {exc}")
+
+    # Interactive message
+    elif message_type == "interactive":
+        button_id = incoming_message.get("button_id", "")
+
+        fuel_buttons = {
+            "fuel_regular": "regular",
+            "fuel_premium": "premium",
+            "fuel_diesel": "diesel",
+        }
+
+        sort_buttons = {
+            "sort_distance": "distance",
+            "sort_price": "price",
+            "sort_best": "best",
+        }
+
+        if button_id in fuel_buttons:
+            fuel_type = fuel_buttons[button_id]
+
+            pending_search_preferences[sender] = {
+                "fuel_type": fuel_type,
+                "sort": "best",
+            }
+
+            try:
+                send_reply_buttons(
+                    to=sender,
+                    body_text=(
+                        f"⛽ {fuel_type.title()} selected.\n\n"
+                        "How would you like me to find your gas station?"
+                    ),
+                    buttons=[
+                        {
+                            "id": "sort_distance",
+                            "title": "Closest",
+                        },
+                        {
+                            "id": "sort_price",
+                            "title": "Cheapest",
+                        },
+                        {
+                            "id": "sort_best",
+                            "title": "Best",
+                        },
+                    ],
+                )
+
+            except WhatsAppServiceError as exc:
+                print(f"Could not send WhatsApp buttons: {exc}")
+
+        elif button_id in sort_buttons:
+            sort_option = sort_buttons[button_id]
+
+            preferences = pending_search_preferences.get(
+                sender,
+                {
+                    "fuel_type": "regular",
+                    "sort": "best",
+                },
+            )
+
+            preferences["sort"] = sort_option
+            pending_search_preferences[sender] = preferences
+
+            sort_names = {
+                "distance": "Closest",
+                "price": "Cheapest",
+                "best": "Best",
+            }
+
+            try:
+                send_text_message(
+                    to=sender,
+                    message=(
+                        "✅ Search preferences saved.\n\n"
+                        f"⛽ Fuel: {preferences['fuel_type'].title()}\n"
+                        f"🔎 Sort: {sort_names[sort_option]}\n\n"
+                        "📍 Now send me your location."
+                    ),
+                )
+
             except WhatsAppServiceError as exc:
                 print(f"Could not send WhatsApp reply: {exc}")
 

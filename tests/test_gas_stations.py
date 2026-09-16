@@ -9,6 +9,9 @@ from app.services.whatsapp import (
     build_text_reply,
     build_gas_stations_reply,
     parse_search_preferences,
+    send_reply_buttons,
+    WhatsAppServiceError,
+    extract_incoming_message,
 )
 
 client = TestClient(app)
@@ -438,3 +441,272 @@ def test_parse_search_preferences_empty_text():
     result = parse_search_preferences("")
 
     assert result == {}
+
+
+def test_send_reply_buttons(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"messages": [{"id": "wamid.test"}]}
+
+    def fake_post(url, headers, json, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_ACCESS_TOKEN",
+        "test-token",
+    )
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_PHONE_NUMBER_ID",
+        "123456789",
+    )
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_API_VERSION",
+        "v25.0",
+    )
+    monkeypatch.setattr(
+        "app.services.whatsapp.httpx.post",
+        fake_post,
+    )
+
+    result = send_reply_buttons(
+        to="15551234567",
+        body_text="What fuel are you looking for?",
+        buttons=[
+            {
+                "id": "fuel_regular",
+                "title": "Regular",
+            },
+            {
+                "id": "fuel_premium",
+                "title": "Premium",
+            },
+            {
+                "id": "fuel_diesel",
+                "title": "Diesel",
+            },
+        ],
+    )
+
+    assert result == {"messages": [{"id": "wamid.test"}]}
+
+    assert captured["json"]["type"] == "interactive"
+
+    buttons = captured["json"]["interactive"]["action"]["buttons"]
+
+    assert buttons[0]["reply"]["id"] == "fuel_regular"
+    assert buttons[1]["reply"]["id"] == "fuel_premium"
+    assert buttons[2]["reply"]["id"] == "fuel_diesel"
+
+
+def test_send_reply_buttons_rejects_more_than_three_buttons(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_ACCESS_TOKEN",
+        "test-token",
+    )
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_PHONE_NUMBER_ID",
+        "123456789",
+    )
+
+    buttons = [
+        {"id": "one", "title": "One"},
+        {"id": "two", "title": "Two"},
+        {"id": "three", "title": "Three"},
+        {"id": "four", "title": "Four"},
+    ]
+
+    try:
+        send_reply_buttons(
+            to="15551234567",
+            body_text="Choose an option",
+            buttons=buttons,
+        )
+
+        assert False, "Expected WhatsAppServiceError"
+
+    except WhatsAppServiceError:
+        assert True
+
+
+def test_extract_incoming_interactive_button_reply():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "15551234567",
+                                    "id": "wamid.test",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "fuel_diesel",
+                                            "title": "Diesel",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = extract_incoming_message(payload)
+
+    assert result == {
+        "from": "15551234567",
+        "type": "interactive",
+        "message_id": "wamid.test",
+        "interactive_type": "button_reply",
+        "button_id": "fuel_diesel",
+        "button_title": "Diesel",
+    }
+
+
+def test_whatsapp_button_flow(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as main_module
+
+    client = TestClient(main_module.app)
+
+    sent_button_messages = []
+    sent_text_messages = []
+
+    def fake_send_reply_buttons(to, body_text, buttons):
+        sent_button_messages.append(
+            {
+                "to": to,
+                "body_text": body_text,
+                "buttons": buttons,
+            }
+        )
+        return {"messages": [{"id": "wamid.buttons"}]}
+
+    def fake_send_text_message(to, message):
+        sent_text_messages.append(
+            {
+                "to": to,
+                "message": message,
+            }
+        )
+        return {"messages": [{"id": "wamid.text"}]}
+
+    monkeypatch.setattr(
+        main_module,
+        "send_reply_buttons",
+        fake_send_reply_buttons,
+    )
+
+    monkeypatch.setattr(
+        main_module,
+        "send_text_message",
+        fake_send_text_message,
+    )
+
+    main_module.pending_search_preferences.clear()
+
+    sender = "15551234567"
+
+    diesel_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.diesel",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "fuel_diesel",
+                                            "title": "Diesel",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=diesel_payload,
+    )
+
+    assert response.status_code == 200
+
+    assert main_module.pending_search_preferences[sender] == {
+        "fuel_type": "diesel",
+        "sort": "best",
+    }
+
+    assert sent_button_messages[0]["buttons"][0]["id"] == "sort_distance"
+    assert sent_button_messages[0]["buttons"][1]["id"] == "sort_price"
+    assert sent_button_messages[0]["buttons"][2]["id"] == "sort_best"
+
+    cheapest_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.cheapest",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "sort_price",
+                                            "title": "Cheapest",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=cheapest_payload,
+    )
+
+    assert response.status_code == 200
+
+    assert main_module.pending_search_preferences[sender] == {
+        "fuel_type": "diesel",
+        "sort": "price",
+    }
+
+    assert "Diesel" in sent_text_messages[0]["message"]
+    assert "Cheapest" in sent_text_messages[0]["message"]
+
+    main_module.pending_search_preferences.clear()
