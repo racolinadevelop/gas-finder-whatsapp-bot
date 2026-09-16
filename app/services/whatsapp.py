@@ -1,4 +1,5 @@
 import httpx
+from app.i18n import t
 
 from app.config import (
     WHATSAPP_ACCESS_TOKEN,
@@ -204,17 +205,36 @@ def build_text_reply(incoming_message: dict) -> str | None:
     return "Hi! 👋\n" "Send me your location and I'll find nearby gas stations for you."
 
 
-def build_gas_stations_reply(result: dict) -> str:
+def build_gas_stations_reply(
+    result: dict,
+    language: str = "en",
+    fuel_type: str = "regular",
+    sort: str = "best",
+) -> str:
     stations = result.get("stations", [])
 
+    fuel_name = t(language, f"fuel_{fuel_type}")
+    sort_name = t(language, f"sort_{sort}")
+
     if not stations:
-        return (
-            "⛽ I couldn't find gas stations with available results "
-            "near your location."
-        )
+        return t(language, "no_results")
+
+    displayed_count = min(len(stations), 5)
 
     lines = [
-        "⛽ Nearby gas stations",
+        t(language, "results_title"),
+        "",
+        t(
+            language,
+            "results_summary",
+            fuel=fuel_name,
+            sort=sort_name,
+        ),
+        t(
+            language,
+            "results_count",
+            count=displayed_count,
+        ),
         "",
     ]
 
@@ -227,7 +247,7 @@ def build_gas_stations_reply(result: dict) -> str:
         if price is not None:
             price_text = f"${price:.3f}/gal"
         else:
-            price_text = "Price unavailable"
+            price_text = t(language, "price_unavailable")
 
         lines.append(
             f"{index}. {name}\n" f"   💵 {price_text}\n" f"   📍 {distance:.2f} mi"

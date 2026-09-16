@@ -399,7 +399,7 @@ def test_build_gas_stations_reply_without_results():
 
     reply = build_gas_stations_reply(result)
 
-    assert "couldn't find gas stations" in reply
+    assert "couldn't find nearby gas stations" in reply.lower()
 
 
 def test_parse_search_preferences_diesel_cheapest():
@@ -718,13 +718,13 @@ def test_whatsapp_button_flow(monkeypatch):
 def test_translation_english():
     result = t("en", "choose_fuel")
 
-    assert result == "⛽ What type of fuel are you looking for?"
+    assert result == ("⛽ To get started, what type of fuel do you need?")
 
 
 def test_translation_spanish():
     result = t("es", "choose_fuel")
 
-    assert result == "⛽ ¿Qué tipo de combustible buscas?"
+    assert result == ("⛽ Para comenzar, ¿qué tipo de combustible necesitas?")
 
 
 def test_translation_with_variables():
@@ -742,7 +742,7 @@ def test_translation_with_variables():
 def test_translation_falls_back_to_english():
     result = t("fr", "choose_fuel")
 
-    assert result == "⛽ What type of fuel are you looking for?"
+    assert result == ("⛽ To get started, what type of fuel do you need?")
 
 
 def test_whatsapp_spanish_button_flow(monkeypatch):
@@ -830,9 +830,11 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         "sort": "best",
     }
 
-    assert "¿Qué tipo de combustible buscas?" in (sent_button_messages[0]["body_text"])
+    assert "¿qué tipo de combustible necesitas?" in (
+        sent_button_messages[0]["body_text"]
+    )
 
-    assert sent_button_messages[0]["buttons"][2]["title"] == "Diésel"
+    assert sent_button_messages[0]["buttons"][2]["title"] == "🚛 Diésel"
 
     # 2. Select Diesel
     diesel_payload = {
@@ -875,9 +877,9 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         "sort": "best",
     }
 
-    assert sent_button_messages[1]["buttons"][0]["title"] == "Más cerca"
-    assert sent_button_messages[1]["buttons"][1]["title"] == "Más barato"
-    assert sent_button_messages[1]["buttons"][2]["title"] == "Mejor"
+    assert sent_button_messages[1]["buttons"][0]["title"] == "📍 Más cerca"
+    assert sent_button_messages[1]["buttons"][1]["title"] == "💵 Más barato"
+    assert sent_button_messages[1]["buttons"][2]["title"] == "⭐ Mejor opción"
 
     # 3. Select Cheapest
     cheapest_payload = {
@@ -922,6 +924,36 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
 
     assert "Diésel" in sent_text_messages[0]["message"]
     assert "Más barato" in sent_text_messages[0]["message"]
-    assert "Ahora envíame tu ubicación" in sent_text_messages[0]["message"]
+    assert "Ahora comparte tu ubicación" in (sent_text_messages[0]["message"])
 
     main_module.pending_search_preferences.clear()
+
+
+def test_build_gas_stations_reply_spanish():
+    result = {
+        "stations": [
+            {
+                "name": "Shell",
+                "distance_miles": 0.56,
+                "selected_fuel": {
+                    "available": True,
+                    "price": 4.10,
+                },
+            }
+        ]
+    }
+
+    reply = build_gas_stations_reply(
+        result,
+        language="es",
+        fuel_type="regular",
+        sort="price",
+    )
+
+    assert "Gasolineras cercanas" in reply
+    assert "Combustible: Regular" in reply
+    assert "Ordenado por: Más barato" in reply
+    assert "Resultados mostrados: 1" in reply
+    assert "Shell" in reply
+    assert "$4.100/gal" in reply
+    assert "0.56 mi" in reply

@@ -222,19 +222,6 @@ async def receive_whatsapp_webhook(request: Request):
                 "sort": "best",
             }
 
-            fuel_titles = {
-                "en": {
-                    "regular": "Regular",
-                    "premium": "Premium",
-                    "diesel": "Diesel",
-                },
-                "es": {
-                    "regular": "Regular",
-                    "premium": "Premium",
-                    "diesel": "Diésel",
-                },
-            }
-
             try:
                 send_reply_buttons(
                     to=sender,
@@ -244,15 +231,15 @@ async def receive_whatsapp_webhook(request: Request):
                     buttons=[
                         {
                             "id": "fuel_regular",
-                            "title": fuel_titles[language]["regular"],
+                            "title": t(language, "button_fuel_regular"),
                         },
                         {
                             "id": "fuel_premium",
-                            "title": fuel_titles[language]["premium"],
+                            "title": t(language, "button_fuel_premium"),
                         },
                         {
                             "id": "fuel_diesel",
-                            "title": fuel_titles[language]["diesel"],
+                            "title": t(language, "button_fuel_diesel"),
                         },
                     ],
                 )
@@ -291,19 +278,6 @@ async def receive_whatsapp_webhook(request: Request):
                 },
             }
 
-            sort_titles = {
-                "en": {
-                    "distance": "Closest",
-                    "price": "Cheapest",
-                    "best": "Best",
-                },
-                "es": {
-                    "distance": "Más cerca",
-                    "price": "Más barato",
-                    "best": "Mejor",
-                },
-            }
-
             try:
                 send_reply_buttons(
                     to=sender,
@@ -314,15 +288,15 @@ async def receive_whatsapp_webhook(request: Request):
                     buttons=[
                         {
                             "id": "sort_distance",
-                            "title": sort_titles[language]["distance"],
+                            "title": t(language, "button_sort_distance"),
                         },
                         {
                             "id": "sort_price",
-                            "title": sort_titles[language]["price"],
+                            "title": t(language, "button_sort_price"),
                         },
                         {
                             "id": "sort_best",
-                            "title": sort_titles[language]["best"],
+                            "title": t(language, "button_sort_best"),
                         },
                     ],
                 )
@@ -400,6 +374,7 @@ async def receive_whatsapp_webhook(request: Request):
             preferences = pending_search_preferences.pop(
                 sender,
                 {
+                    "language": "en",
                     "fuel_type": "regular",
                     "sort": "best",
                 },
@@ -415,7 +390,12 @@ async def receive_whatsapp_webhook(request: Request):
                 vehicle_mpg=25,
             )
 
-            reply = build_gas_stations_reply(result)
+            reply = build_gas_stations_reply(
+                result,
+                language=preferences["language"],
+                fuel_type=preferences["fuel_type"],
+                sort=preferences["sort"],
+            )
 
             send_text_message(
                 to=sender,
