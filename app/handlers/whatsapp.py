@@ -7,7 +7,7 @@ from app.conversation import (
     parse_navigation_action,
 )
 from app.i18n import t
-from app.intelligence import IntentType, RuleBasedIntentInterpreter
+from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
 from app.routing import MessageRouter
@@ -76,7 +76,7 @@ SORT_NAMES = {
 }
 
 conversation_store = InMemoryConversationStore()
-intent_interpreter = RuleBasedIntentInterpreter()
+intent_interpreter = build_intent_interpreter()
 
 
 def send_language_prompt(sender: str, error: bool = False) -> None:

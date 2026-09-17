@@ -16,6 +16,7 @@ class MessageInterpretation:
     sort: str | None = None
     language: str | None = None
     confidence: float = 0.0
+    source: str = "rules"
 
     @property
     def search_preferences(self) -> dict[str, str]:

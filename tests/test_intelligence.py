@@ -1,8 +1,20 @@
+import json
+
+import httpx
 import pytest
 
 from app.conversation import ConversationState
 from app.handlers import whatsapp as whatsapp_handler
-from app.intelligence import IntentType, RuleBasedIntentInterpreter
+from app.intelligence import (
+    AIInterpretationError,
+    HybridIntentInterpreter,
+    IntentType,
+    MessageInterpretation,
+    OpenAIIntentInterpreter,
+    RuleBasedIntentInterpreter,
+    build_intent_interpreter,
+)
+from app import config
 from app.models import IncomingMessage
 
 
@@ -161,3 +173,225 @@ def test_sort_text_advances_expected_sort_step(monkeypatch):
     assert "Más barato" in sent_messages[0]["message"]
 
     whatsapp_handler.conversation_store.clear()
+
+
+class FakeOpenAIResponse:
+    def __init__(self, response_data):
+        self.response_data = response_data
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.response_data
+
+
+def openai_response_for(data):
+    return {
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": json.dumps(data),
+                    }
+                ],
+            }
+        ]
+    }
+
+
+def test_openai_interpreter_uses_structured_outputs_without_storage():
+    captured = {}
+
+    def fake_post(url, headers, json, timeout):
+        captured.update(
+            {
+                "url": url,
+                "headers": headers,
+                "json": json,
+                "timeout": timeout,
+            }
+        )
+        return FakeOpenAIResponse(
+            openai_response_for(
+                {
+                    "intent": "search_gas",
+                    "fuel_type": "premium",
+                    "sort": "best",
+                    "language": "es",
+                    "confidence": 0.91,
+                }
+            )
+        )
+
+    interpreter = OpenAIIntentInterpreter(
+        api_key="test-key",
+        model="test-model",
+        http_post=fake_post,
+    )
+
+    result = interpreter.interpret(
+        "Quiero una opción premium que realmente me convenga"
+    )
+
+    assert result == MessageInterpretation(
+        intent=IntentType.SEARCH_GAS,
+        fuel_type="premium",
+        sort="best",
+        language="es",
+        confidence=0.91,
+        source="openai",
+    )
+    assert captured["url"] == "https://api.openai.com/v1/responses"
+    assert captured["headers"]["Authorization"] == "Bearer test-key"
+    assert captured["json"]["store"] is False
+    assert captured["json"]["model"] == "test-model"
+    assert captured["json"]["text"]["format"]["type"] == "json_schema"
+    assert captured["json"]["text"]["format"]["strict"] is True
+
+
+def test_openai_interpreter_converts_timeout_to_domain_error():
+    def timeout_post(*args, **kwargs):
+        raise httpx.TimeoutException("timed out")
+
+    interpreter = OpenAIIntentInterpreter(
+        api_key="test-key",
+        model="test-model",
+        http_post=timeout_post,
+    )
+
+    with pytest.raises(AIInterpretationError, match="timed out"):
+        interpreter.interpret("find a station")
+
+
+def test_openai_interpreter_rejects_invalid_structured_result():
+    def fake_post(*args, **kwargs):
+        return FakeOpenAIResponse(
+            openai_response_for(
+                {
+                    "intent": "search_gas",
+                    "fuel_type": "jet_fuel",
+                    "sort": "price",
+                    "language": "en",
+                    "confidence": 0.9,
+                }
+            )
+        )
+
+    interpreter = OpenAIIntentInterpreter(
+        api_key="test-key",
+        model="test-model",
+        http_post=fake_post,
+    )
+
+    with pytest.raises(AIInterpretationError, match="fuel type"):
+        interpreter.interpret("I need jet fuel")
+
+
+class RecordingInterpreter:
+    def __init__(self, result=None, error=None):
+        self.result = result
+        self.error = error
+        self.messages = []
+
+    def interpret(self, text):
+        self.messages.append(text)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+def test_hybrid_interpreter_does_not_call_ai_for_clear_rule_result():
+    fallback = RecordingInterpreter(
+        result=MessageInterpretation(intent=IntentType.UNKNOWN)
+    )
+    interpreter = HybridIntentInterpreter(
+        rules=RuleBasedIntentInterpreter(),
+        fallback=fallback,
+    )
+
+    result = interpreter.interpret("premium closest")
+
+    assert result.fuel_type == "premium"
+    assert result.sort == "distance"
+    assert result.source == "rules"
+    assert fallback.messages == []
+
+
+def test_hybrid_interpreter_calls_ai_for_ambiguous_message():
+    fallback_result = MessageInterpretation(
+        intent=IntentType.SEARCH_GAS,
+        fuel_type="regular",
+        sort="best",
+        language="en",
+        confidence=0.88,
+        source="openai",
+    )
+    fallback = RecordingInterpreter(result=fallback_result)
+    interpreter = HybridIntentInterpreter(
+        rules=RuleBasedIntentInterpreter(),
+        fallback=fallback,
+    )
+
+    result = interpreter.interpret("Show me the option that makes most sense")
+
+    assert result == fallback_result
+    assert fallback.messages == ["Show me the option that makes most sense"]
+
+
+def test_hybrid_interpreter_keeps_rule_result_when_ai_fails():
+    fallback = RecordingInterpreter(
+        error=AIInterpretationError("service unavailable")
+    )
+    interpreter = HybridIntentInterpreter(
+        rules=RuleBasedIntentInterpreter(),
+        fallback=fallback,
+    )
+
+    result = interpreter.interpret("Necesito gasolina")
+
+    assert result.intent == IntentType.SEARCH_GAS
+    assert result.source == "rules"
+
+
+def test_hybrid_does_not_replace_known_search_with_ai_unknown():
+    fallback = RecordingInterpreter(
+        result=MessageInterpretation(
+            intent=IntentType.UNKNOWN,
+            confidence=0.9,
+            source="openai",
+        )
+    )
+    interpreter = HybridIntentInterpreter(
+        rules=RuleBasedIntentInterpreter(),
+        fallback=fallback,
+    )
+
+    result = interpreter.interpret("Necesito gasolina")
+
+    assert result.intent == IntentType.SEARCH_GAS
+    assert result.language == "es"
+    assert result.source == "rules"
+
+
+def test_factory_keeps_ai_disabled_without_explicit_flag(monkeypatch):
+    monkeypatch.setattr(config, "AI_INTENT_ENABLED", False)
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "test-key")
+
+    interpreter = build_intent_interpreter()
+
+    assert isinstance(interpreter, RuleBasedIntentInterpreter)
+
+
+def test_factory_builds_hybrid_when_ai_is_configured(monkeypatch):
+    monkeypatch.setattr(config, "AI_INTENT_ENABLED", True)
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(config, "OPENAI_MODEL", "test-model")
+
+    interpreter = build_intent_interpreter()
+
+    assert isinstance(interpreter, HybridIntentInterpreter)
+    assert isinstance(interpreter.fallback, OpenAIIntentInterpreter)
+    assert interpreter.fallback.model == "test-model"

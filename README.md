@@ -63,6 +63,7 @@ WhatsApp response
 - Detect text and location messages
 - Interpret natural-language searches in English and Spanish
 - Keep language interpretation separate from deterministic station lookup
+- Optionally use an OpenAI Structured Outputs fallback for ambiguous messages
 - Send automatic WhatsApp replies
 - Deployed on Railway with a stable public URL
 - Automated testing with pytest
@@ -170,6 +171,21 @@ WHATSAPP_VERIFY_TOKEN=
 ```
 
 Never commit `.env`.
+
+### Optional AI intent fallback
+
+The deterministic interpreter is always available and does not require an API
+key. To enable the model fallback only for ambiguous messages, configure:
+
+```env
+AI_INTENT_ENABLED=true
+OPENAI_API_KEY=your_test_key
+OPENAI_MODEL=gpt-6-astra
+```
+
+The model only returns a validated search intent. It does not receive tools and
+cannot search for or invent gas-station results. If the API is unavailable, the
+bot continues with the deterministic interpreter.
 
 ## Run Locally
 
