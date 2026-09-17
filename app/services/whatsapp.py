@@ -1,5 +1,6 @@
 import httpx
 from app.i18n import t
+from app.models import IncomingMessage
 
 from app.config import (
     WHATSAPP_ACCESS_TOKEN,
@@ -151,55 +152,8 @@ def send_reply_buttons(
     return response.json()
 
 
-def extract_incoming_message(payload: dict):
-    try:
-        value = payload["entry"][0]["changes"][0]["value"]
-
-        messages = value.get("messages", [])
-
-        if not messages:
-            return None
-
-        message = messages[0]
-
-        sender = message.get("from")
-        message_type = message.get("type")
-
-        result = {
-            "from": sender,
-            "type": message_type,
-            "message_id": message.get("id"),
-        }
-
-        if message_type == "text":
-            result["text"] = message.get("text", {}).get("body")
-
-        elif message_type == "location":
-            location = message.get("location", {})
-
-            result["latitude"] = location.get("latitude")
-            result["longitude"] = location.get("longitude")
-
-        elif message_type == "interactive":
-            interactive = message.get("interactive", {})
-            interactive_type = interactive.get("type")
-
-            result["interactive_type"] = interactive_type
-
-            if interactive_type == "button_reply":
-                button_reply = interactive.get("button_reply", {})
-
-                result["button_id"] = button_reply.get("id")
-                result["button_title"] = button_reply.get("title")
-
-        return result
-
-    except (KeyError, IndexError, TypeError):
-        return None
-
-
-def build_text_reply(incoming_message: dict) -> str | None:
-    if incoming_message.get("type") != "text":
+def build_text_reply(incoming_message: IncomingMessage) -> str | None:
+    if incoming_message.message_type != "text":
         return None
 
     return "Hi! 👋\n" "Send me your location and I'll find nearby gas stations for you."
@@ -217,13 +171,16 @@ def build_gas_stations_reply(
     sort_name = t(language, f"sort_{sort}")
 
     if not stations:
-        return t(language, "no_results")
+        return (
+            f"{t(language, 'no_results', fuel=fuel_name, sort=sort_name)}\n\n"
+            f"{t(language, 'navigation_hint')}"
+        )
 
     displayed_count = min(len(stations), 5)
 
     lines = [
         t(language, "results_title"),
-        "",
+        "━━━━━━━━━━━━━━",
         t(
             language,
             "results_summary",
@@ -235,23 +192,68 @@ def build_gas_stations_reply(
             "results_count",
             count=displayed_count,
         ),
-        "",
     ]
+
+    rank_labels = {
+        1: "1️⃣",
+        2: "2️⃣",
+        3: "3️⃣",
+        4: "4️⃣",
+        5: "5️⃣",
+    }
 
     for index, station in enumerate(stations[:5], start=1):
         selected_fuel = station.get("selected_fuel", {})
         price = selected_fuel.get("price")
         distance = station.get("distance_miles")
         name = station.get("name", "Unknown gas station")
+        address = station.get("address")
 
         if price is not None:
             price_text = f"${price:.3f}/gal"
         else:
             price_text = t(language, "price_unavailable")
 
-        lines.append(
-            f"{index}. {name}\n" f"   💵 {price_text}\n" f"   📍 {distance:.2f} mi"
+        station_lines = [
+            f"{rank_labels[index]} {name}",
+        ]
+
+        if index == 1:
+            station_lines.append(t(language, f"top_result_{sort}"))
+
+        station_lines.extend(
+            [
+                t(
+                    language,
+                    "station_price",
+                    fuel=fuel_name,
+                    price=price_text,
+                ),
+                t(
+                    language,
+                    "station_distance",
+                    distance=distance,
+                ),
+            ]
         )
+
+        if address:
+            station_lines.append(
+                t(
+                    language,
+                    "station_address",
+                    address=address,
+                )
+            )
+
+        lines.append("\n".join(station_lines))
+
+    lines.extend(
+        [
+            "━━━━━━━━━━━━━━",
+            t(language, "navigation_hint"),
+        ]
+    )
 
     return "\n\n".join(lines)
 

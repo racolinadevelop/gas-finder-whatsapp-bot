@@ -1,17 +1,19 @@
 from fastapi.testclient import TestClient
+from app.conversation import ConversationSession, ConversationState
 from app.main import app
 from app.services.google_places import (
     GooglePlacesServiceError,
     sort_stations,
 )
 from app.utils.cost import calculate_estimated_cost
+from app.models import IncomingMessage
+from app.parsers import parse_incoming_message
 from app.services.whatsapp import (
     build_text_reply,
     build_gas_stations_reply,
     parse_search_preferences,
     send_reply_buttons,
     WhatsAppServiceError,
-    extract_incoming_message,
 )
 from app.i18n import t
 
@@ -39,7 +41,7 @@ def test_google_timeout(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.search_nearby_gas_stations",
+        "app.routers.gas_stations.search_nearby_gas_stations",
         fake_search,
     )
 
@@ -66,7 +68,7 @@ def test_no_gas_stations(monkeypatch):
         }
 
     monkeypatch.setattr(
-        "app.main.search_nearby_gas_stations",
+        "app.routers.gas_stations.search_nearby_gas_stations",
         fake_search,
     )
 
@@ -92,7 +94,7 @@ def test_google_authentication_error(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.search_nearby_gas_stations",
+        "app.routers.gas_stations.search_nearby_gas_stations",
         fake_search,
     )
 
@@ -119,7 +121,7 @@ def test_google_rate_limit(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.search_nearby_gas_stations",
+        "app.routers.gas_stations.search_nearby_gas_stations",
         fake_search,
     )
 
@@ -146,7 +148,7 @@ def test_google_server_error(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.search_nearby_gas_stations",
+        "app.routers.gas_stations.search_nearby_gas_stations",
         fake_search,
     )
 
@@ -171,7 +173,7 @@ def test_google_connection_error(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "app.main.search_nearby_gas_stations",
+        "app.routers.gas_stations.search_nearby_gas_stations",
         fake_search,
     )
 
@@ -334,12 +336,12 @@ def test_best_option_can_choose_closer_station():
 
 
 def test_build_text_reply_for_text_message():
-    incoming_message = {
-        "from": "15551234567",
-        "type": "text",
-        "message_id": "wamid.test",
-        "text": "hello",
-    }
+    incoming_message = IncomingMessage(
+        sender="15551234567",
+        message_type="text",
+        message_id="wamid.test",
+        text="hello",
+    )
 
     reply = build_text_reply(incoming_message)
 
@@ -349,13 +351,13 @@ def test_build_text_reply_for_text_message():
 
 
 def test_build_text_reply_ignores_non_text_message():
-    incoming_message = {
-        "from": "15551234567",
-        "type": "location",
-        "message_id": "wamid.test",
-        "latitude": 38.25,
-        "longitude": -85.75,
-    }
+    incoming_message = IncomingMessage(
+        sender="15551234567",
+        message_type="location",
+        message_id="wamid.test",
+        latitude=38.25,
+        longitude=-85.75,
+    )
 
     reply = build_text_reply(incoming_message)
 
@@ -367,6 +369,7 @@ def test_build_gas_stations_reply_with_results():
         "stations": [
             {
                 "name": "Speedway",
+                "address": "100 Main St, Louisville, KY",
                 "distance_miles": 0.72,
                 "selected_fuel": {
                     "available": True,
@@ -392,6 +395,11 @@ def test_build_gas_stations_reply_with_results():
     assert "$2.999/gal" in reply
     assert "0.72 mi" in reply
     assert "1.14 mi" in reply
+    assert "Fuel type: Regular" in reply
+    assert "Category: Best option" in reply
+    assert "Best overall option" in reply
+    assert "Regular: $2.899/gal" in reply
+    assert "100 Main St, Louisville, KY" in reply
 
 
 def test_build_gas_stations_reply_without_results():
@@ -400,6 +408,32 @@ def test_build_gas_stations_reply_without_results():
     reply = build_gas_stations_reply(result)
 
     assert "couldn't find nearby gas stations" in reply.lower()
+    assert "Fuel type: Regular" in reply
+    assert "Category: Best option" in reply
+
+
+def test_build_gas_stations_reply_with_unavailable_price():
+    result = {
+        "stations": [
+            {
+                "name": "BP",
+                "distance_miles": 0.35,
+                "selected_fuel": {
+                    "available": False,
+                    "price": None,
+                },
+            }
+        ]
+    }
+
+    reply = build_gas_stations_reply(
+        result,
+        fuel_type="premium",
+        sort="distance",
+    )
+
+    assert "Premium: Price unavailable" in reply
+    assert "Closest option" in reply
 
 
 def test_parse_search_preferences_diesel_cheapest():
@@ -541,7 +575,7 @@ def test_send_reply_buttons_rejects_more_than_three_buttons(
         assert True
 
 
-def test_extract_incoming_interactive_button_reply():
+def test_parse_incoming_interactive_button_reply():
     payload = {
         "entry": [
             {
@@ -569,23 +603,220 @@ def test_extract_incoming_interactive_button_reply():
         ]
     }
 
-    result = extract_incoming_message(payload)
+    result = parse_incoming_message(payload)
 
-    assert result == {
-        "from": "15551234567",
-        "type": "interactive",
-        "message_id": "wamid.test",
-        "interactive_type": "button_reply",
-        "button_id": "fuel_diesel",
-        "button_title": "Diesel",
+    assert result == IncomingMessage(
+        sender="15551234567",
+        message_type="interactive",
+        message_id="wamid.test",
+        interactive_type="button_reply",
+        selection_id="fuel_diesel",
+        selection_title="Diesel",
+    )
+
+
+def test_parse_incoming_text_message():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "15551234567",
+                                    "id": "wamid.text",
+                                    "timestamp": "1789689600",
+                                    "type": "text",
+                                    "text": {"body": "premium closest"},
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
     }
+
+    result = parse_incoming_message(payload)
+
+    assert result.sender == "15551234567"
+    assert result.message_type == "text"
+    assert result.message_id == "wamid.text"
+    assert result.timestamp == "1789689600"
+    assert result.text == "premium closest"
+
+
+def test_parse_incoming_location_message():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "15551234567",
+                                    "id": "wamid.location",
+                                    "type": "location",
+                                    "location": {
+                                        "latitude": 38.2527,
+                                        "longitude": -85.7585,
+                                        "name": "Downtown Louisville",
+                                        "address": "Louisville, KY",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = parse_incoming_message(payload)
+
+    assert result.message_type == "location"
+    assert result.latitude == 38.2527
+    assert result.longitude == -85.7585
+    assert result.location_name == "Downtown Louisville"
+    assert result.location_address == "Louisville, KY"
+
+
+def test_parse_incoming_interactive_list_reply():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "15551234567",
+                                    "id": "wamid.list",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "list_reply",
+                                        "list_reply": {
+                                            "id": "fuel_regular",
+                                            "title": "Regular",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = parse_incoming_message(payload)
+
+    assert result.interactive_type == "list_reply"
+    assert result.selection_id == "fuel_regular"
+    assert result.selection_title == "Regular"
+
+
+def test_parse_incoming_image_message():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "15551234567",
+                                    "id": "wamid.image",
+                                    "type": "image",
+                                    "image": {
+                                        "id": "media.image",
+                                        "mime_type": "image/jpeg",
+                                        "sha256": "image-hash",
+                                        "caption": "Gas price sign",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = parse_incoming_message(payload)
+
+    assert result.message_type == "image"
+    assert result.media_id == "media.image"
+    assert result.mime_type == "image/jpeg"
+    assert result.sha256 == "image-hash"
+    assert result.caption == "Gas price sign"
+
+
+def test_parse_incoming_audio_message():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": "15551234567",
+                                    "id": "wamid.audio",
+                                    "type": "audio",
+                                    "audio": {
+                                        "id": "media.audio",
+                                        "mime_type": "audio/ogg; codecs=opus",
+                                        "sha256": "audio-hash",
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    result = parse_incoming_message(payload)
+
+    assert result.message_type == "audio"
+    assert result.media_id == "media.audio"
+    assert result.mime_type == "audio/ogg; codecs=opus"
+    assert result.sha256 == "audio-hash"
+
+
+def test_parse_incoming_message_ignores_status_event():
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "statuses": [
+                                {
+                                    "id": "wamid.status",
+                                    "status": "delivered",
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    assert parse_incoming_message(payload) is None
 
 
 def test_whatsapp_button_flow(monkeypatch):
     from fastapi.testclient import TestClient
-    import app.main as main_module
+    from app.main import app
+    import app.handlers.whatsapp as whatsapp_handler
 
-    client = TestClient(main_module.app)
+    client = TestClient(app)
 
     sent_button_messages = []
     sent_text_messages = []
@@ -610,20 +841,57 @@ def test_whatsapp_button_flow(monkeypatch):
         return {"messages": [{"id": "wamid.text"}]}
 
     monkeypatch.setattr(
-        main_module,
+        whatsapp_handler,
         "send_reply_buttons",
         fake_send_reply_buttons,
     )
 
     monkeypatch.setattr(
-        main_module,
+        whatsapp_handler,
         "send_text_message",
         fake_send_text_message,
     )
 
-    main_module.pending_search_preferences.clear()
+    whatsapp_handler.conversation_store.clear()
 
     sender = "15551234567"
+
+    english_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.english",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "button_reply",
+                                        "button_reply": {
+                                            "id": "lang_en",
+                                            "title": "English",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=english_payload,
+    )
+
+    assert response.status_code == 200
+    assert whatsapp_handler.conversation_store.get(sender).state == (
+        ConversationState.WAITING_FUEL
+    )
 
     diesel_payload = {
         "entry": [
@@ -659,15 +927,17 @@ def test_whatsapp_button_flow(monkeypatch):
 
     assert response.status_code == 200
 
-    assert main_module.pending_search_preferences[sender] == {
-        "language": "en",
-        "fuel_type": "diesel",
-        "sort": "best",
-    }
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_SORT,
+        language="en",
+        fuel_type="diesel",
+        sort="best",
+    )
 
-    assert sent_button_messages[0]["buttons"][0]["id"] == "sort_distance"
-    assert sent_button_messages[0]["buttons"][1]["id"] == "sort_price"
-    assert sent_button_messages[0]["buttons"][2]["id"] == "sort_best"
+    assert sent_button_messages[1]["buttons"][0]["id"] == "sort_distance"
+    assert sent_button_messages[1]["buttons"][1]["id"] == "sort_price"
+    assert sent_button_messages[1]["buttons"][2]["id"] == "sort_best"
 
     cheapest_payload = {
         "entry": [
@@ -703,16 +973,18 @@ def test_whatsapp_button_flow(monkeypatch):
 
     assert response.status_code == 200
 
-    assert main_module.pending_search_preferences[sender] == {
-        "language": "en",
-        "fuel_type": "diesel",
-        "sort": "price",
-    }
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_LOCATION,
+        language="en",
+        fuel_type="diesel",
+        sort="price",
+    )
 
     assert "Diesel" in sent_text_messages[0]["message"]
     assert "Cheapest" in sent_text_messages[0]["message"]
 
-    main_module.pending_search_preferences.clear()
+    whatsapp_handler.conversation_store.clear()
 
 
 def test_translation_english():
@@ -747,9 +1019,10 @@ def test_translation_falls_back_to_english():
 
 def test_whatsapp_spanish_button_flow(monkeypatch):
     from fastapi.testclient import TestClient
-    import app.main as main_module
+    from app.main import app
+    import app.handlers.whatsapp as whatsapp_handler
 
-    client = TestClient(main_module.app)
+    client = TestClient(app)
 
     sent_button_messages = []
     sent_text_messages = []
@@ -774,18 +1047,18 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         return {"messages": [{"id": "wamid.text"}]}
 
     monkeypatch.setattr(
-        main_module,
+        whatsapp_handler,
         "send_reply_buttons",
         fake_send_reply_buttons,
     )
 
     monkeypatch.setattr(
-        main_module,
+        whatsapp_handler,
         "send_text_message",
         fake_send_text_message,
     )
 
-    main_module.pending_search_preferences.clear()
+    whatsapp_handler.conversation_store.clear()
 
     sender = "15551234567"
 
@@ -824,11 +1097,13 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
 
     assert response.status_code == 200
 
-    assert main_module.pending_search_preferences[sender] == {
-        "language": "es",
-        "fuel_type": "regular",
-        "sort": "best",
-    }
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_FUEL,
+        language="es",
+        fuel_type="regular",
+        sort="best",
+    )
 
     assert "¿qué tipo de combustible necesitas?" in (
         sent_button_messages[0]["body_text"]
@@ -871,11 +1146,13 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
 
     assert response.status_code == 200
 
-    assert main_module.pending_search_preferences[sender] == {
-        "language": "es",
-        "fuel_type": "diesel",
-        "sort": "best",
-    }
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_SORT,
+        language="es",
+        fuel_type="diesel",
+        sort="best",
+    )
 
     assert sent_button_messages[1]["buttons"][0]["title"] == "📍 Más cerca"
     assert sent_button_messages[1]["buttons"][1]["title"] == "💵 Más barato"
@@ -916,17 +1193,19 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
 
     assert response.status_code == 200
 
-    assert main_module.pending_search_preferences[sender] == {
-        "language": "es",
-        "fuel_type": "diesel",
-        "sort": "price",
-    }
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_LOCATION,
+        language="es",
+        fuel_type="diesel",
+        sort="price",
+    )
 
     assert "Diésel" in sent_text_messages[0]["message"]
     assert "Más barato" in sent_text_messages[0]["message"]
     assert "Ahora comparte tu ubicación" in (sent_text_messages[0]["message"])
 
-    main_module.pending_search_preferences.clear()
+    whatsapp_handler.conversation_store.clear()
 
 
 def test_build_gas_stations_reply_spanish():
@@ -934,6 +1213,7 @@ def test_build_gas_stations_reply_spanish():
         "stations": [
             {
                 "name": "Shell",
+                "address": "200 Market St, Louisville, KY",
                 "distance_miles": 0.56,
                 "selected_fuel": {
                     "available": True,
@@ -952,8 +1232,11 @@ def test_build_gas_stations_reply_spanish():
 
     assert "Gasolineras cercanas" in reply
     assert "Combustible: Regular" in reply
-    assert "Ordenado por: Más barato" in reply
+    assert "Categoría: Más barato" in reply
     assert "Resultados mostrados: 1" in reply
     assert "Shell" in reply
     assert "$4.100/gal" in reply
-    assert "0.56 mi" in reply
+    assert "Opción más barata" in reply
+    assert "Regular: $4.100/gal" in reply
+    assert "Distancia: 0.56 mi" in reply
+    assert "200 Market St, Louisville, KY" in reply

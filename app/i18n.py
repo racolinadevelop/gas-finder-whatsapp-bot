@@ -7,6 +7,11 @@ TRANSLATIONS = {
             "Para continuar, por favor selecciona tu idioma preferido."
         ),
 
+        "invalid_language": (
+            "I couldn't use that response. Please choose English or Español "
+            "using one of the buttons below."
+        ),
+
         "welcome": (
             "👋 Hi! Welcome to Gas Finder!\n\n"
             "I'll help you find nearby gas stations "
@@ -15,6 +20,11 @@ TRANSLATIONS = {
 
         "choose_fuel": (
             "⛽ To get started, what type of fuel do you need?"
+        ),
+
+        "invalid_fuel": (
+            "That option doesn't match this step. Please choose a fuel type "
+            "using one of the buttons below."
         ),
 
         "fuel_regular": "Regular",
@@ -36,6 +46,21 @@ TRANSLATIONS = {
             "⭐ Best option — balance of price and distance"
         ),
 
+        "invalid_sort": (
+            "That option doesn't match this step. Please choose how you want "
+            "the results ranked."
+        ),
+
+        "invalid_location": (
+            "📍 I'm waiting for your location. Please use WhatsApp's location "
+            "option to share it with me."
+        ),
+
+        "navigation_hint": (
+            "↩️ You can type “back” or “menu” at any time.\n"
+            "También puedes escribir “atrás” o “menú”."
+        ),
+
         "sort_distance": "Closest",
         "sort_price": "Cheapest",
         "sort_best": "Best option",
@@ -46,8 +71,8 @@ TRANSLATIONS = {
 
         "preferences_saved": (
             "Great! ✅ Your search is ready.\n\n"
-            "⛽ Fuel: {fuel}\n"
-            "🔎 Search: {sort}\n\n"
+            "⛽ Fuel type: {fuel}\n"
+            "🏷️ Category: {sort}\n\n"
             "📍 Now share your location and I'll find "
             "the best nearby options for you."
         ),
@@ -57,17 +82,27 @@ TRANSLATIONS = {
         ),
 
         "results_summary": (
-            "🚗 Fuel: {fuel}\n"
-            "🔎 Sorted by: {sort}"
+            "🔎 Search details\n"
+            "⛽ Fuel type: {fuel}\n"
+            "🏷️ Category: {sort}"
         ),
+
+        "top_result_distance": "📍 Closest option",
+        "top_result_price": "💵 Cheapest option",
+        "top_result_best": "⭐ Best overall option",
+
+        "station_price": "⛽ {fuel}: {price}",
+        "station_distance": "📍 Distance: {distance:.2f} mi",
+        "station_address": "🏠 {address}",
 
         "price_unavailable": (
             "Price unavailable"
         ),
 
         "no_results": (
-            "I couldn't find nearby gas stations "
-            "for this search."
+            "I couldn't find nearby gas stations for this search.\n\n"
+            "⛽ Fuel type: {fuel}\n"
+            "🏷️ Category: {sort}"
         ),
         "results_count": (
             "📊 Results shown: {count}"
@@ -82,6 +117,11 @@ TRANSLATIONS = {
             "Para continuar, por favor selecciona tu idioma preferido."
         ),
 
+        "invalid_language": (
+            "No pude usar esa respuesta. Selecciona English o Español usando "
+            "uno de los botones de abajo."
+        ),
+
         "welcome": (
             "👋 ¡Hola! Bienvenido a Gas Finder.\n\n"
             "Te ayudaré a encontrar gasolineras cercanas "
@@ -90,6 +130,11 @@ TRANSLATIONS = {
 
         "choose_fuel": (
             "⛽ Para comenzar, ¿qué tipo de combustible necesitas?"
+        ),
+
+        "invalid_fuel": (
+            "Esa opción no corresponde a este paso. Selecciona un tipo de "
+            "combustible usando uno de los botones de abajo."
         ),
 
         "fuel_regular": "Regular",
@@ -111,6 +156,20 @@ TRANSLATIONS = {
             "⭐ Mejor opción — balance entre precio y distancia"
         ),
 
+        "invalid_sort": (
+            "Esa opción no corresponde a este paso. Selecciona cómo quieres "
+            "que ordene los resultados."
+        ),
+
+        "invalid_location": (
+            "📍 Estoy esperando tu ubicación. Usa la opción de ubicación de "
+            "WhatsApp para compartirla conmigo."
+        ),
+
+        "navigation_hint": (
+            "↩️ Puedes escribir “atrás” o “menú” en cualquier momento."
+        ),
+
         "sort_distance": "Más cerca",
         "sort_price": "Más barato",
         "sort_best": "Mejor opción",
@@ -122,7 +181,7 @@ TRANSLATIONS = {
         "preferences_saved": (
             "¡Perfecto! ✅ Tu búsqueda está lista.\n\n"
             "⛽ Combustible: {fuel}\n"
-            "🔎 Búsqueda: {sort}\n\n"
+            "🏷️ Categoría: {sort}\n\n"
             "📍 Ahora comparte tu ubicación y buscaré "
             "las mejores opciones cercanas para ti."
         ),
@@ -132,17 +191,27 @@ TRANSLATIONS = {
         ),
 
         "results_summary": (
-            "🚗 Combustible: {fuel}\n"
-            "🔎 Ordenado por: {sort}"
+            "🔎 Detalles de búsqueda\n"
+            "⛽ Combustible: {fuel}\n"
+            "🏷️ Categoría: {sort}"
         ),
+
+        "top_result_distance": "📍 Opción más cercana",
+        "top_result_price": "💵 Opción más barata",
+        "top_result_best": "⭐ Mejor opción general",
+
+        "station_price": "⛽ {fuel}: {price}",
+        "station_distance": "📍 Distancia: {distance:.2f} mi",
+        "station_address": "🏠 {address}",
 
         "price_unavailable": (
             "Precio no disponible"
         ),
 
         "no_results": (
-            "No encontré gasolineras cercanas "
-            "para esta búsqueda."
+            "No encontré gasolineras cercanas para esta búsqueda.\n\n"
+            "⛽ Combustible: {fuel}\n"
+            "🏷️ Categoría: {sort}"
         ),
         "results_count": (
             "📊 Resultados mostrados: {count}"
