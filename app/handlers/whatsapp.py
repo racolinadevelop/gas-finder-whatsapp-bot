@@ -38,6 +38,7 @@ from app.services.whatsapp import (
     send_text_message,
 )
 from app.subscriptions import SubscriptionService
+from app.webhooks import InMemoryMessageDeduplicator
 
 GREETINGS = {
     "hi",
@@ -54,6 +55,7 @@ intent_interpreter = build_intent_interpreter()
 subscription_service = SubscriptionService()
 location_search_service = LocationSearchService()
 conversation_transitions = ConversationTransitions(conversation_store)
+message_deduplicator = InMemoryMessageDeduplicator()
 
 
 def send_prompt(sender: str, prompt: Prompt) -> None:
@@ -152,11 +154,19 @@ def handle_whatsapp_webhook(payload: dict) -> dict:
         print("WhatsApp webhook event without a user message.")
         return {"status": "ok"}
 
+    if not message_deduplicator.claim(incoming_message.message_id):
+        print("Ignoring duplicate WhatsApp message.")
+        return {"status": "ok"}
+
     print("Incoming WhatsApp message:")
     print(incoming_message)
 
-    subscription_service.ensure_user(incoming_message.sender)
-    message_router.dispatch(incoming_message)
+    try:
+        subscription_service.ensure_user(incoming_message.sender)
+        message_router.dispatch(incoming_message)
+    except Exception:
+        message_deduplicator.release(incoming_message.message_id)
+        raise
 
     return {"status": "ok"}
 
