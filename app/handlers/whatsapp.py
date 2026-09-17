@@ -8,17 +8,10 @@ from app.conversation import (
     SearchFlowDecision,
     SearchFlowPrompt,
     decide_search_flow,
-    is_distance_in_range,
-    parse_distance_input,
     parse_navigation_action,
 )
-from app.conversation.options import (
-    CUSTOM_DISTANCE_ID,
-    DISTANCE_OPTIONS,
-    FUEL_BUTTONS,
-    LANGUAGE_BUTTONS,
-    SORT_BUTTONS,
-)
+from app.conversation.options import LANGUAGE_BUTTONS
+from app.handlers.conversation_states import ConversationStateHandlers
 from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
@@ -28,7 +21,6 @@ from app.presentation import (
     Prompt,
     ReplyButtonsPrompt,
     TextPrompt,
-    build_custom_distance_prompt,
     build_distance_prompt,
     build_fuel_prompt,
     build_language_prompt,
@@ -86,6 +78,12 @@ def send_prompt(sender: str, prompt: Prompt) -> None:
         print(f"Could not send conversation prompt: {exc}")
 
 
+conversation_state_handlers = ConversationStateHandlers(
+    conversation_transitions,
+    send_prompt,
+)
+
+
 def send_language_prompt(sender: str, error: bool = False) -> None:
     send_prompt(sender, build_language_prompt(error=error))
 
@@ -120,27 +118,6 @@ def send_distance_prompt(
     error: bool = False,
 ) -> None:
     send_prompt(sender, build_distance_prompt(session, error=error))
-
-
-def send_custom_distance_prompt(
-    sender: str,
-    language: str,
-    error: bool = False,
-    range_error: bool = False,
-) -> None:
-    send_prompt(
-        sender,
-        build_custom_distance_prompt(
-            language,
-            error=error,
-            range_error=range_error,
-        ),
-    )
-
-
-def handle_distance_selection(sender: str, distance: float) -> None:
-    session = conversation_transitions.select_distance(sender, distance)
-    send_location_prompt(sender, session, saved=True)
 
 
 def send_location_prompt(
@@ -265,32 +242,16 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         return
 
     if button_id in LANGUAGE_BUTTONS:
-        handle_language_selection(sender, LANGUAGE_BUTTONS[button_id])
+        conversation_state_handlers.language_selection(
+            sender,
+            LANGUAGE_BUTTONS[button_id],
+        )
         return
 
     session = conversation_transitions.ensure_started(sender)
 
     if not interactive_state_router.dispatch(incoming_message, session):
         send_expected_prompt(sender, session)
-
-
-def handle_language_selection(sender: str, language: str) -> None:
-    conversation_transitions.select_language(sender, language)
-
-    send_fuel_prompt(sender, language, welcome=True)
-
-
-def handle_fuel_selection(sender: str, fuel_type: str) -> None:
-    session = conversation_transitions.select_fuel(sender, fuel_type)
-    send_sort_prompt(sender, session, selected=True)
-
-
-def handle_sort_selection(sender: str, sort_option: str) -> None:
-    session = conversation_transitions.select_sort(sender, sort_option)
-    if session.state == ConversationState.WAITING_LOCATION:
-        send_location_prompt(sender, session, saved=True)
-    else:
-        send_distance_prompt(sender, session)
 
 
 def search_from_location(
@@ -356,107 +317,28 @@ def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
     send_expected_prompt(incoming_message.sender, session)
 
 
-def handle_distance_text(
-    incoming_message: IncomingMessage,
-    session: ConversationSession,
-) -> None:
-    distance = parse_distance_input(incoming_message.text or "")
-
-    if distance is None:
-        if session.state == ConversationState.WAITING_DISTANCE:
-            send_distance_prompt(incoming_message.sender, session, error=True)
-        else:
-            send_custom_distance_prompt(
-                incoming_message.sender,
-                session.language,
-                error=True,
-            )
-        return
-
-    if not is_distance_in_range(distance):
-        send_custom_distance_prompt(
-            incoming_message.sender,
-            session.language,
-            range_error=True,
-        )
-        conversation_transitions.request_custom_distance(
-            incoming_message.sender
-        )
-        return
-
-    handle_distance_selection(incoming_message.sender, distance)
-
-
-def handle_fuel_interaction(
-    incoming_message: IncomingMessage,
-    session: ConversationSession,
-) -> None:
-    button_id = incoming_message.selection_id or ""
-
-    if button_id in FUEL_BUTTONS:
-        handle_fuel_selection(
-            incoming_message.sender,
-            FUEL_BUTTONS[button_id],
-        )
-        return
-
-    send_expected_prompt(incoming_message.sender, session)
-
-
-def handle_sort_interaction(
-    incoming_message: IncomingMessage,
-    session: ConversationSession,
-) -> None:
-    button_id = incoming_message.selection_id or ""
-
-    if button_id in SORT_BUTTONS:
-        handle_sort_selection(
-            incoming_message.sender,
-            SORT_BUTTONS[button_id],
-        )
-        return
-
-    send_expected_prompt(incoming_message.sender, session)
-
-
-def handle_distance_interaction(
-    incoming_message: IncomingMessage,
-    session: ConversationSession,
-) -> None:
-    button_id = incoming_message.selection_id or ""
-
-    if button_id in DISTANCE_OPTIONS:
-        handle_distance_selection(
-            incoming_message.sender,
-            DISTANCE_OPTIONS[button_id],
-        )
-        return
-
-    if button_id == CUSTOM_DISTANCE_ID:
-        conversation_transitions.request_custom_distance(
-            incoming_message.sender
-        )
-        send_custom_distance_prompt(
-            incoming_message.sender,
-            session.language,
-        )
-        return
-
-    send_expected_prompt(incoming_message.sender, session)
-
-
 text_state_router = ConversationStateRouter(
     handlers={
-        ConversationState.WAITING_DISTANCE: handle_distance_text,
-        ConversationState.WAITING_CUSTOM_DISTANCE: handle_distance_text,
+        ConversationState.WAITING_DISTANCE: (
+            conversation_state_handlers.distance_text
+        ),
+        ConversationState.WAITING_CUSTOM_DISTANCE: (
+            conversation_state_handlers.distance_text
+        ),
     }
 )
 
 interactive_state_router = ConversationStateRouter(
     handlers={
-        ConversationState.WAITING_FUEL: handle_fuel_interaction,
-        ConversationState.WAITING_SORT: handle_sort_interaction,
-        ConversationState.WAITING_DISTANCE: handle_distance_interaction,
+        ConversationState.WAITING_FUEL: (
+            conversation_state_handlers.fuel_interaction
+        ),
+        ConversationState.WAITING_SORT: (
+            conversation_state_handlers.sort_interaction
+        ),
+        ConversationState.WAITING_DISTANCE: (
+            conversation_state_handlers.distance_interaction
+        ),
     }
 )
 
