@@ -115,53 +115,29 @@ def deduplicate_stations(stations: list) -> list:
     return list(unique_stations.values())
 
 
-def _candidate_diagnostic_lines(
-    stations: list,
+def _log_search_summary(
     *,
+    pages: int,
+    candidates: int,
+    within_radius: int,
+    priced: int,
+    results: int,
     fuel_type: str,
-    raw_candidate_count: int,
-) -> list[str]:
-    lines = [
-        (
-            "[GooglePlaces diagnostics] "
-            f"raw_candidates={raw_candidate_count} "
-            f"parsed_candidates={len(stations)} fuel={fuel_type}"
-        )
-    ]
-
-    for index, station in enumerate(stations, start=1):
-        selected_fuel = station["selected_fuel"]
-        available = selected_fuel["available"]
-        price = selected_fuel.get("price")
-        status = "KEEP" if available else "REMOVED_NO_PRICE"
-        distance = station.get("distance_miles")
-        distance_text = f"{distance:.2f}mi" if distance is not None else "unknown"
-
-        lines.append(
-            (
-                f"[GooglePlaces diagnostics] {index:02d}. "
-                f"{station.get('name', 'Unknown gas station')} | "
-                f"price={price} | status={status} | "
-                f"distance={distance_text} | "
-                f"address={station.get('address', 'Address not available')}"
-            )
-        )
-
-    return lines
-
-
-def _log_candidate_diagnostics(
-    stations: list,
-    *,
-    fuel_type: str,
-    raw_candidate_count: int,
+    sort: str,
 ) -> None:
-    for line in _candidate_diagnostic_lines(
-        stations,
-        fuel_type=fuel_type,
-        raw_candidate_count=raw_candidate_count,
-    ):
-        print(line, flush=True)
+    print(
+        (
+            "[GooglePlaces] "
+            f"pages={pages} "
+            f"candidates={candidates} "
+            f"within_radius={within_radius} "
+            f"priced={priced} "
+            f"results={results} "
+            f"fuel={fuel_type} "
+            f"sort={sort}"
+        ),
+        flush=True,
+    )
 
 
 def _request_google_text_search_page(headers: dict, payload: dict) -> dict:
@@ -227,7 +203,7 @@ def _fetch_google_text_search_places(
     latitude: float,
     longitude: float,
     radius: float,
-) -> list:
+) -> tuple[list, int]:
     base_payload = {
         "textQuery": "gas station",
         "includedType": "gas_station",
@@ -251,31 +227,22 @@ def _fetch_google_text_search_places(
 
     places = []
     page_token = None
+    pages_fetched = 0
 
-    for page_number in range(1, GOOGLE_TEXT_MAX_PAGES + 1):
+    for _ in range(GOOGLE_TEXT_MAX_PAGES):
         payload = dict(base_payload)
         if page_token:
             payload["pageToken"] = page_token
 
         data = _request_google_text_search_page(headers, payload)
-        page_places = data.get("places", [])
-        places.extend(page_places)
-
-        print(
-            (
-                "[GooglePlaces diagnostics] "
-                f"text_search_page={page_number} "
-                f"page_candidates={len(page_places)} "
-                f"total_candidates={len(places)}"
-            ),
-            flush=True,
-        )
+        pages_fetched += 1
+        places.extend(data.get("places", []))
 
         page_token = data.get("nextPageToken")
         if not page_token:
             break
 
-    return places
+    return places, pages_fetched
 
 
 def _search_nearby_gas_stations(
@@ -301,7 +268,7 @@ def _search_nearby_gas_stations(
         ),
     }
 
-    places = _fetch_google_text_search_places(
+    places, pages_fetched = _fetch_google_text_search_places(
         headers=headers,
         latitude=latitude,
         longitude=longitude,
@@ -309,12 +276,14 @@ def _search_nearby_gas_stations(
     )
 
     if not places:
-        print(
-            (
-                "[GooglePlaces diagnostics] raw_candidates=0 "
-                f"parsed_candidates=0 fuel={fuel_type}"
-            ),
-            flush=True,
+        _log_search_summary(
+            pages=pages_fetched,
+            candidates=0,
+            within_radius=0,
+            priced=0,
+            results=0,
+            fuel_type=fuel_type,
+            sort=sort,
         )
         return {
             "stations": [],
@@ -396,17 +365,23 @@ def _search_nearby_gas_stations(
 
         stations.append(station)
 
-    _log_candidate_diagnostics(
-        stations,
-        fuel_type=fuel_type,
-        raw_candidate_count=len(places),
-    )
-
+    within_radius_count = len(stations)
     stations = deduplicate_stations(stations)
     stations = [
         station for station in stations if station["selected_fuel"]["available"]
     ]
+    priced_count = len(stations)
     stations = sort_stations(stations, sort)[:limit]
+
+    _log_search_summary(
+        pages=pages_fetched,
+        candidates=len(places),
+        within_radius=within_radius_count,
+        priced=priced_count,
+        results=len(stations),
+        fuel_type=fuel_type,
+        sort=sort,
+    )
 
     return {
         "stations": stations,
