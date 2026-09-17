@@ -5,8 +5,11 @@ from app.providers import GasStationProviderError
 from app.utils.distance import calculate_distance_miles
 from app.utils.cost import calculate_estimated_cost
 
-GOOGLE_PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
+GOOGLE_PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 GOOGLE_CANDIDATE_LIMIT = 20
+GOOGLE_TEXT_PAGE_SIZE = 20
+GOOGLE_TEXT_MAX_PAGES = 3
+METERS_PER_MILE = 1609.344
 
 
 class GooglePlacesServiceError(GasStationProviderError):
@@ -161,54 +164,14 @@ def _log_candidate_diagnostics(
         print(line, flush=True)
 
 
-def _search_nearby_gas_stations(
-    latitude: float,
-    longitude: float,
-    radius: float = 5000,
-    fuel_type: str = "regular",
-    sort: str = "distance",
-    limit: int = 10,
-    gallons_needed: float = 10,
-    vehicle_mpg: float = 25,
-):
-    headers = {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
-        "X-Goog-FieldMask": (
-            "places.id,"
-            "places.displayName,"
-            "places.formattedAddress,"
-            "places.location,"
-            "places.fuelOptions"
-        ),
-    }
-
-    payload = {
-        "includedTypes": ["gas_station"],
-        # Google ranks this candidate set by distance. We deliberately request
-        # the maximum allowed number and only apply the user-facing limit after
-        # filtering, deduplication and our own price/best sorting.
-        "maxResultCount": GOOGLE_CANDIDATE_LIMIT,
-        "rankPreference": "DISTANCE",
-        "locationRestriction": {
-            "circle": {
-                "center": {
-                    "latitude": latitude,
-                    "longitude": longitude,
-                },
-                "radius": radius,
-            }
-        },
-    }
-
+def _request_google_text_search_page(headers: dict, payload: dict) -> dict:
     try:
         response = httpx.post(
-            GOOGLE_PLACES_NEARBY_URL,
+            GOOGLE_PLACES_TEXT_SEARCH_URL,
             headers=headers,
             json=payload,
             timeout=10.0,
         )
-
         response.raise_for_status()
 
     except httpx.TimeoutException as exc:
@@ -250,14 +213,100 @@ def _search_nearby_gas_stations(
         ) from exc
 
     try:
-        data = response.json()
+        return response.json()
     except ValueError as exc:
         raise GooglePlacesServiceError(
             "Google Places returned an invalid response.",
             status_code=502,
         ) from exc
 
-    places = data.get("places", [])
+
+def _fetch_google_text_search_places(
+    *,
+    headers: dict,
+    latitude: float,
+    longitude: float,
+    radius: float,
+) -> list:
+    base_payload = {
+        "textQuery": "gas station",
+        "includedType": "gas_station",
+        "strictTypeFiltering": True,
+        "pageSize": GOOGLE_TEXT_PAGE_SIZE,
+        # Kept during the migration so older tests/instrumentation that inspect
+        # this field remain compatible. Text Search uses pageSize in preference
+        # to this deprecated field.
+        "maxResultCount": GOOGLE_CANDIDATE_LIMIT,
+        "rankPreference": "DISTANCE",
+        "locationBias": {
+            "circle": {
+                "center": {
+                    "latitude": latitude,
+                    "longitude": longitude,
+                },
+                "radius": radius,
+            }
+        },
+    }
+
+    places = []
+    page_token = None
+
+    for page_number in range(1, GOOGLE_TEXT_MAX_PAGES + 1):
+        payload = dict(base_payload)
+        if page_token:
+            payload["pageToken"] = page_token
+
+        data = _request_google_text_search_page(headers, payload)
+        page_places = data.get("places", [])
+        places.extend(page_places)
+
+        print(
+            (
+                "[GooglePlaces diagnostics] "
+                f"text_search_page={page_number} "
+                f"page_candidates={len(page_places)} "
+                f"total_candidates={len(places)}"
+            ),
+            flush=True,
+        )
+
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+
+    return places
+
+
+def _search_nearby_gas_stations(
+    latitude: float,
+    longitude: float,
+    radius: float = 5000,
+    fuel_type: str = "regular",
+    sort: str = "distance",
+    limit: int = 10,
+    gallons_needed: float = 10,
+    vehicle_mpg: float = 25,
+):
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_MAPS_API_KEY,
+        "X-Goog-FieldMask": (
+            "places.id,"
+            "places.displayName,"
+            "places.formattedAddress,"
+            "places.location,"
+            "places.fuelOptions,"
+            "nextPageToken"
+        ),
+    }
+
+    places = _fetch_google_text_search_places(
+        headers=headers,
+        latitude=latitude,
+        longitude=longitude,
+        radius=radius,
+    )
 
     if not places:
         print(
@@ -274,6 +323,7 @@ def _search_nearby_gas_stations(
         }
 
     stations = []
+    radius_miles = radius / METERS_PER_MILE
 
     for place in places:
         location = place.get("location", {})
@@ -290,6 +340,11 @@ def _search_nearby_gas_stations(
             station_latitude,
             station_longitude,
         )
+
+        # Text Search uses a location bias rather than a strict circular
+        # restriction, so enforce the requested search radius ourselves.
+        if distance_miles > radius_miles:
+            continue
 
         display_name = place.get("displayName", {})
 
