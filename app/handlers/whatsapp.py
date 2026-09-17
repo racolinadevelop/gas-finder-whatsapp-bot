@@ -13,7 +13,7 @@ from app.intelligence import IntentType, build_intent_interpreter
 from app.intelligence.models import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
-from app.routing import MessageRouter
+from app.routing import ConversationStateRouter, MessageRouter
 from app.providers import GasStationProviderError
 from app.services.stations import search_nearby_gas_stations
 from app.services.whatsapp import (
@@ -430,35 +430,10 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         return
 
     current_session = conversation_store.get(sender)
-    if current_session is not None and current_session.state in {
-        ConversationState.WAITING_DISTANCE,
-        ConversationState.WAITING_CUSTOM_DISTANCE,
-    }:
-        distance = parse_distance_input(text)
-        if distance is None:
-            if current_session.state == ConversationState.WAITING_DISTANCE:
-                send_distance_prompt(sender, current_session, error=True)
-            else:
-                send_custom_distance_prompt(
-                    sender,
-                    current_session.language,
-                    error=True,
-                )
-            return
-
-        if not MIN_DISTANCE_MILES <= distance <= MAX_DISTANCE_MILES:
-            send_custom_distance_prompt(
-                sender,
-                current_session.language,
-                range_error=True,
-            )
-            conversation_store.update(
-                sender,
-                state=ConversationState.WAITING_CUSTOM_DISTANCE,
-            )
-            return
-
-        handle_distance_selection(sender, distance)
+    if current_session is not None and text_state_router.dispatch(
+        incoming_message,
+        current_session,
+    ):
         return
 
     interpretation = intent_interpreter.interpret(text)
@@ -626,31 +601,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
             state=ConversationState.WAITING_LANGUAGE,
         )
 
-    if (
-        button_id in FUEL_BUTTONS
-        and session.state == ConversationState.WAITING_FUEL
-    ):
-        handle_fuel_selection(sender, FUEL_BUTTONS[button_id])
-    elif (
-        button_id in SORT_BUTTONS
-        and session.state == ConversationState.WAITING_SORT
-    ):
-        handle_sort_selection(sender, SORT_BUTTONS[button_id])
-    elif (
-        button_id in DISTANCE_OPTIONS
-        and session.state == ConversationState.WAITING_DISTANCE
-    ):
-        handle_distance_selection(sender, DISTANCE_OPTIONS[button_id])
-    elif (
-        button_id == CUSTOM_DISTANCE_ID
-        and session.state == ConversationState.WAITING_DISTANCE
-    ):
-        conversation_store.update(
-            sender,
-            state=ConversationState.WAITING_CUSTOM_DISTANCE,
-        )
-        send_custom_distance_prompt(sender, session.language)
-    else:
+    if not interactive_state_router.dispatch(incoming_message, session):
         send_expected_prompt(sender, session)
 
 
@@ -695,7 +646,10 @@ def handle_sort_selection(sender: str, sort_option: str) -> None:
         send_distance_prompt(sender, session)
 
 
-def handle_location_message(incoming_message: IncomingMessage) -> None:
+def search_from_location(
+    incoming_message: IncomingMessage,
+    session: ConversationSession,
+) -> None:
     sender = incoming_message.sender
     latitude = incoming_message.latitude
     longitude = incoming_message.longitude
@@ -703,17 +657,8 @@ def handle_location_message(incoming_message: IncomingMessage) -> None:
     if latitude is None or longitude is None:
         return
 
-    current_session = conversation_store.get(sender)
-
-    if (
-        current_session is not None
-        and current_session.state != ConversationState.WAITING_LOCATION
-    ):
-        send_expected_prompt(sender, current_session)
-        return
-
     try:
-        session = conversation_store.pop(sender) or ConversationSession(sender=sender)
+        conversation_store.pop(sender)
         radius = (
             session.max_distance_miles * 1609.344
             if session.max_distance_miles is not None
@@ -748,6 +693,27 @@ def handle_location_message(incoming_message: IncomingMessage) -> None:
         print(f"Unable to send WhatsApp reply: {exc}")
 
 
+def handle_location_message(incoming_message: IncomingMessage) -> None:
+    if (
+        incoming_message.latitude is None
+        or incoming_message.longitude is None
+    ):
+        return
+
+    sender = incoming_message.sender
+    session = conversation_store.get(sender)
+
+    if session is None:
+        search_from_location(
+            incoming_message,
+            ConversationSession(sender=sender),
+        )
+        return
+
+    if not location_state_router.dispatch(incoming_message, session):
+        send_expected_prompt(sender, session)
+
+
 def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
     print(
         "WhatsApp message type is not supported yet: "
@@ -763,6 +729,119 @@ def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
         )
 
     send_expected_prompt(incoming_message.sender, session)
+
+
+def handle_distance_text(
+    incoming_message: IncomingMessage,
+    session: ConversationSession,
+) -> None:
+    distance = parse_distance_input(incoming_message.text or "")
+
+    if distance is None:
+        if session.state == ConversationState.WAITING_DISTANCE:
+            send_distance_prompt(incoming_message.sender, session, error=True)
+        else:
+            send_custom_distance_prompt(
+                incoming_message.sender,
+                session.language,
+                error=True,
+            )
+        return
+
+    if not MIN_DISTANCE_MILES <= distance <= MAX_DISTANCE_MILES:
+        send_custom_distance_prompt(
+            incoming_message.sender,
+            session.language,
+            range_error=True,
+        )
+        conversation_store.update(
+            incoming_message.sender,
+            state=ConversationState.WAITING_CUSTOM_DISTANCE,
+        )
+        return
+
+    handle_distance_selection(incoming_message.sender, distance)
+
+
+def handle_fuel_interaction(
+    incoming_message: IncomingMessage,
+    session: ConversationSession,
+) -> None:
+    button_id = incoming_message.selection_id or ""
+
+    if button_id in FUEL_BUTTONS:
+        handle_fuel_selection(
+            incoming_message.sender,
+            FUEL_BUTTONS[button_id],
+        )
+        return
+
+    send_expected_prompt(incoming_message.sender, session)
+
+
+def handle_sort_interaction(
+    incoming_message: IncomingMessage,
+    session: ConversationSession,
+) -> None:
+    button_id = incoming_message.selection_id or ""
+
+    if button_id in SORT_BUTTONS:
+        handle_sort_selection(
+            incoming_message.sender,
+            SORT_BUTTONS[button_id],
+        )
+        return
+
+    send_expected_prompt(incoming_message.sender, session)
+
+
+def handle_distance_interaction(
+    incoming_message: IncomingMessage,
+    session: ConversationSession,
+) -> None:
+    button_id = incoming_message.selection_id or ""
+
+    if button_id in DISTANCE_OPTIONS:
+        handle_distance_selection(
+            incoming_message.sender,
+            DISTANCE_OPTIONS[button_id],
+        )
+        return
+
+    if button_id == CUSTOM_DISTANCE_ID:
+        conversation_store.update(
+            incoming_message.sender,
+            state=ConversationState.WAITING_CUSTOM_DISTANCE,
+        )
+        send_custom_distance_prompt(
+            incoming_message.sender,
+            session.language,
+        )
+        return
+
+    send_expected_prompt(incoming_message.sender, session)
+
+
+text_state_router = ConversationStateRouter(
+    handlers={
+        ConversationState.WAITING_DISTANCE: handle_distance_text,
+        ConversationState.WAITING_CUSTOM_DISTANCE: handle_distance_text,
+    }
+)
+
+interactive_state_router = ConversationStateRouter(
+    handlers={
+        ConversationState.WAITING_FUEL: handle_fuel_interaction,
+        ConversationState.WAITING_SORT: handle_sort_interaction,
+        ConversationState.WAITING_DISTANCE: handle_distance_interaction,
+    }
+)
+
+location_state_router = ConversationStateRouter(
+    handlers={
+        ConversationState.WAITING_LOCATION: search_from_location,
+    }
+)
 
 
 message_router = MessageRouter(
