@@ -25,6 +25,7 @@ from app.services.whatsapp import (
     send_reply_buttons,
     send_text_message,
 )
+from app.subscriptions import SubscriptionService
 
 GREETINGS = {
     "hi",
@@ -89,6 +90,7 @@ SORT_NAMES = {
 
 conversation_store = InMemoryConversationStore()
 intent_interpreter = build_intent_interpreter()
+subscription_service = SubscriptionService()
 
 
 def send_language_prompt(sender: str, error: bool = False) -> None:
@@ -403,6 +405,7 @@ def handle_whatsapp_webhook(payload: dict) -> dict:
     print("Incoming WhatsApp message:")
     print(incoming_message)
 
+    subscription_service.ensure_user(incoming_message.sender)
     message_router.dispatch(incoming_message)
 
     return {"status": "ok"}

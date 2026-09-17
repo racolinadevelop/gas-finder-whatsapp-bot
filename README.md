@@ -65,6 +65,7 @@ WhatsApp response
 - Understand a requested maximum distance in miles or kilometers
 - Offer a guided WhatsApp distance list with 1, 3, 5, 10 miles or a custom value
 - Explain why the top "Best option" balances price and travel distance
+- Maintain a centralized Free/Premium subscription and feature-access foundation
 - Keep language interpretation separate from deterministic station lookup
 - Optionally use an OpenAI Structured Outputs fallback for ambiguous messages
 - Send automatic WhatsApp replies
@@ -104,6 +105,7 @@ gas-finder-whatsapp-bot/
 │   ├── parsers/
 │   ├── routers/
 │   ├── routing/
+│   ├── subscriptions/
 │   ├── services/
 │   │   ├── google_places.py
 │   │   └── whatsapp.py
@@ -189,6 +191,18 @@ OPENAI_MODEL=gpt-6-astra
 The model only returns a validated search intent. It does not receive tools and
 cannot search for or invent gas-station results. If the API is unavailable, the
 bot continues with the deterministic interpreter.
+
+### Free and Premium foundation
+
+Every WhatsApp user starts on the Free plan. Access decisions are centralized
+in `SubscriptionService`, which currently keeps the existing gas search,
+directions, and basic comparison available for free. Future features such as
+favorites, price alerts, price history, advanced comparisons, and personalized
+recommendations are defined as Premium capabilities.
+
+Subscription records are currently stored in memory and reset when the app
+restarts. No payment provider or real billing is connected yet; persistent
+storage and Stripe Sandbox can be added behind the same service later.
 
 ## Run Locally
 
