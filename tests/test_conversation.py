@@ -26,15 +26,17 @@ def test_conversation_store_creates_updates_and_pops_session():
 
 
 def test_greeting_sets_waiting_language_state(monkeypatch):
+    sent_messages = []
     whatsapp_handler.conversation_store.clear()
     monkeypatch.setattr(
         whatsapp_handler,
         "send_reply_buttons",
-        lambda **kwargs: {"messages": [{"id": "wamid.buttons"}]},
+        lambda **kwargs: sent_messages.append(kwargs),
     )
     message = IncomingMessage(
         sender="15551234567",
         message_type="text",
+        profile_name="Ramon",
         text="hola",
     )
 
@@ -43,6 +45,7 @@ def test_greeting_sets_waiting_language_state(monkeypatch):
     session = whatsapp_handler.conversation_store.get(message.sender)
     assert session.state == ConversationState.WAITING_LANGUAGE
     assert session.language == "en"
+    assert "Ramon" in sent_messages[0]["body_text"]
 
     whatsapp_handler.conversation_store.clear()
 

@@ -26,11 +26,21 @@ def parse_incoming_message(payload: dict) -> IncomingMessage | None:
         if not sender or not message_type:
             return None
 
+        profile_name = None
+        contacts = value.get("contacts", [])
+        if contacts and isinstance(contacts[0], dict):
+            profile = contacts[0].get("profile", {})
+            if isinstance(profile, dict):
+                raw_profile_name = profile.get("name")
+                if isinstance(raw_profile_name, str):
+                    profile_name = raw_profile_name.strip() or None
+
         fields = {
             "sender": sender,
             "message_type": message_type,
             "message_id": raw_message.get("id"),
             "timestamp": raw_message.get("timestamp"),
+            "profile_name": profile_name,
             "raw_message": raw_message,
         }
 

@@ -23,6 +23,14 @@ def test_language_prompt_contains_language_buttons():
     ]
 
 
+def test_language_prompt_can_include_profile_name():
+    prompt = build_language_prompt(display_name="Ramon")
+
+    assert "Ramon" in prompt.body_text
+    assert "Hi, Ramon!" in prompt.body_text
+    assert "¡Hola, Ramon!" in prompt.body_text
+
+
 def test_spanish_fuel_prompt_can_include_welcome_and_error():
     prompt = build_fuel_prompt("es", welcome=True, error=True)
 
@@ -33,6 +41,16 @@ def test_spanish_fuel_prompt_can_include_welcome_and_error():
         "fuel_premium",
         "fuel_diesel",
     ]
+
+
+def test_spanish_fuel_welcome_can_include_profile_name():
+    prompt = build_fuel_prompt(
+        "es",
+        welcome=True,
+        display_name="Ramon",
+    )
+
+    assert "¡Hola, Ramon!" in prompt.body_text
 
 
 def test_sort_prompt_describes_selected_fuel():

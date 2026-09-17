@@ -38,11 +38,20 @@ class ConversationStateHandlers:
         self._transitions = transitions
         self._send_prompt = send_prompt
 
-    def language_selection(self, sender: str, language: str) -> None:
+    def language_selection(
+        self,
+        sender: str,
+        language: str,
+        display_name: str | None = None,
+    ) -> None:
         self._transitions.select_language(sender, language)
         self._send_prompt(
             sender,
-            build_fuel_prompt(language, welcome=True),
+            build_fuel_prompt(
+                language,
+                welcome=True,
+                display_name=display_name,
+            ),
         )
 
     def fuel_selection(self, sender: str, fuel_type: str) -> None:

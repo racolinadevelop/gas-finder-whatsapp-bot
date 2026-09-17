@@ -55,12 +55,19 @@ SORT_NAMES = {
 }
 
 
-def build_language_prompt(error: bool = False) -> ReplyButtonsPrompt:
+def build_language_prompt(
+    error: bool = False,
+    display_name: str | None = None,
+) -> ReplyButtonsPrompt:
+    if error:
+        body_text = t("en", "invalid_language")
+    elif display_name:
+        body_text = t("en", "choose_language_named", name=display_name)
+    else:
+        body_text = t("en", "choose_language")
+
     return ReplyButtonsPrompt(
-        body_text=(
-            f"{t('en', 'invalid_language' if error else 'choose_language')}"
-            f"\n\n{t('en', 'navigation_hint')}"
-        ),
+        body_text=f"{body_text}\n\n{t('en', 'navigation_hint')}",
         buttons=[
             {"id": "lang_en", "title": "English"},
             {"id": "lang_es", "title": "Español"},
@@ -72,11 +79,17 @@ def build_fuel_prompt(
     language: str,
     welcome: bool = False,
     error: bool = False,
+    display_name: str | None = None,
 ) -> ReplyButtonsPrompt:
     body_parts = []
 
     if welcome:
-        body_parts.append(t(language, "welcome"))
+        if display_name:
+            body_parts.append(
+                t(language, "welcome_named", name=display_name)
+            )
+        else:
+            body_parts.append(t(language, "welcome"))
     if error:
         body_parts.append(t(language, "invalid_fuel"))
 

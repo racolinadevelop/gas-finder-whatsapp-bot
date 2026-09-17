@@ -9,6 +9,7 @@ class IncomingMessage:
     message_type: str
     message_id: str | None = None
     timestamp: str | None = None
+    profile_name: str | None = None
 
     text: str | None = None
 

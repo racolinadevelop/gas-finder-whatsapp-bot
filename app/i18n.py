@@ -6,6 +6,12 @@ TRANSLATIONS = {
             "👋 ¡Hola! Bienvenido a Gas Finder.\n"
             "Para continuar, por favor selecciona tu idioma preferido."
         ),
+        "choose_language_named": (
+            "👋 Hi, {name}! Welcome to Gas Finder.\n"
+            "To continue, please choose your preferred language.\n\n"
+            "👋 ¡Hola, {name}! Bienvenido a Gas Finder.\n"
+            "Para continuar, por favor selecciona tu idioma preferido."
+        ),
 
         "invalid_language": (
             "I couldn't use that response. Please choose English or Español "
@@ -14,6 +20,11 @@ TRANSLATIONS = {
 
         "welcome": (
             "👋 Hi! Welcome to Gas Finder!\n\n"
+            "I'll help you find nearby gas stations "
+            "and compare available fuel prices."
+        ),
+        "welcome_named": (
+            "👋 Hi, {name}! Welcome to Gas Finder!\n\n"
             "I'll help you find nearby gas stations "
             "and compare available fuel prices."
         ),
@@ -165,6 +176,12 @@ TRANSLATIONS = {
             "👋 ¡Hola! Bienvenido a Gas Finder.\n"
             "Para continuar, por favor selecciona tu idioma preferido."
         ),
+        "choose_language_named": (
+            "👋 Hi, {name}! Welcome to Gas Finder.\n"
+            "To continue, please choose your preferred language.\n\n"
+            "👋 ¡Hola, {name}! Bienvenido a Gas Finder.\n"
+            "Para continuar, por favor selecciona tu idioma preferido."
+        ),
 
         "invalid_language": (
             "No pude usar esa respuesta. Selecciona English o Español usando "
@@ -173,6 +190,11 @@ TRANSLATIONS = {
 
         "welcome": (
             "👋 ¡Hola! Bienvenido a Gas Finder.\n\n"
+            "Te ayudaré a encontrar gasolineras cercanas "
+            "y comparar los precios disponibles."
+        ),
+        "welcome_named": (
+            "👋 ¡Hola, {name}! Bienvenido a Gas Finder.\n\n"
             "Te ayudaré a encontrar gasolineras cercanas "
             "y comparar los precios disponibles."
         ),

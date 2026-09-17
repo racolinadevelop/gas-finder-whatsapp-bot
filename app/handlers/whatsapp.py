@@ -86,8 +86,18 @@ conversation_state_handlers = ConversationStateHandlers(
 )
 
 
-def send_language_prompt(sender: str, error: bool = False) -> None:
-    send_prompt(sender, build_language_prompt(error=error))
+def send_language_prompt(
+    sender: str,
+    error: bool = False,
+    display_name: str | None = None,
+) -> None:
+    send_prompt(
+        sender,
+        build_language_prompt(
+            error=error,
+            display_name=display_name,
+        ),
+    )
 
 
 def send_fuel_prompt(
@@ -218,7 +228,10 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
     if normalized_text in GREETINGS:
         conversation_transitions.begin(sender)
 
-        send_language_prompt(sender)
+        send_language_prompt(
+            sender,
+            display_name=incoming_message.profile_name,
+        )
 
         return
 
@@ -255,6 +268,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         conversation_state_handlers.language_selection(
             sender,
             LANGUAGE_BUTTONS[button_id],
+            display_name=incoming_message.profile_name,
         )
         return
 
