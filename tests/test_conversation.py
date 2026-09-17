@@ -249,10 +249,9 @@ def test_custom_distance_rejects_out_of_range_value(monkeypatch):
     assert "between 0.1 and 31 miles" in sent_messages[0]["message"]
 
 
-def test_location_uses_saved_maximum_distance_as_search_radius(monkeypatch):
+def test_location_passes_saved_session_to_search_service(monkeypatch):
     sender = "15551234567"
     search_call = {}
-    reply_call = {}
     whatsapp_handler.conversation_store.clear()
     whatsapp_handler.conversation_store.update(
         sender,
@@ -263,23 +262,15 @@ def test_location_uses_saved_maximum_distance_as_search_radius(monkeypatch):
         max_distance_miles=3,
     )
 
-    def fake_search(**kwargs):
-        search_call.update(kwargs)
-        return {"stations": []}
-
-    def fake_reply(result, **kwargs):
-        reply_call.update(kwargs)
-        return "No results"
+    class FakeLocationSearchService:
+        def search(self, **kwargs):
+            search_call.update(kwargs)
+            return "No results"
 
     monkeypatch.setattr(
         whatsapp_handler,
-        "search_nearby_gas_stations",
-        fake_search,
-    )
-    monkeypatch.setattr(
-        whatsapp_handler,
-        "build_gas_stations_reply",
-        fake_reply,
+        "location_search_service",
+        FakeLocationSearchService(),
     )
     monkeypatch.setattr(whatsapp_handler, "send_text_message", lambda **kwargs: None)
 
@@ -292,8 +283,9 @@ def test_location_uses_saved_maximum_distance_as_search_radius(monkeypatch):
         )
     )
 
-    assert search_call["radius"] == 4828.032
-    assert reply_call["max_distance_miles"] == 3
+    assert search_call["session"].max_distance_miles == 3
+    assert search_call["latitude"] == 38.2527
+    assert search_call["longitude"] == -85.7585
     assert whatsapp_handler.conversation_store.get(sender) is None
     monkeypatch.setattr(
         whatsapp_handler,
@@ -371,13 +363,14 @@ def test_location_while_waiting_for_sort_does_not_search(monkeypatch):
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
-    def unexpected_search(**kwargs):
-        raise AssertionError("The gas station search should not run yet")
+    class UnexpectedLocationSearchService:
+        def search(self, **kwargs):
+            raise AssertionError("The gas station search should not run yet")
 
     monkeypatch.setattr(
         whatsapp_handler,
-        "search_nearby_gas_stations",
-        unexpected_search,
+        "location_search_service",
+        UnexpectedLocationSearchService(),
     )
 
     whatsapp_handler.handle_location_message(

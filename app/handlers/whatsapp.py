@@ -38,10 +38,9 @@ from app.presentation import (
 )
 from app.routing import ConversationStateRouter, MessageRouter
 from app.providers import GasStationProviderError
-from app.services.stations import search_nearby_gas_stations
+from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
     WhatsAppServiceError,
-    build_gas_stations_reply,
     send_list_message,
     send_reply_buttons,
     send_text_message,
@@ -61,6 +60,7 @@ GREETINGS = {
 conversation_store = InMemoryConversationStore()
 intent_interpreter = build_intent_interpreter()
 subscription_service = SubscriptionService()
+location_search_service = LocationSearchService()
 
 
 def send_prompt(sender: str, prompt: Prompt) -> None:
@@ -389,28 +389,10 @@ def search_from_location(
 
     try:
         conversation_store.pop(sender)
-        radius = (
-            session.max_distance_miles * 1609.344
-            if session.max_distance_miles is not None
-            else 5000
-        )
-        result = search_nearby_gas_stations(
+        reply = location_search_service.search(
+            session=session,
             latitude=latitude,
             longitude=longitude,
-            radius=radius,
-            fuel_type=session.fuel_type,
-            sort=session.sort,
-            limit=5,
-            gallons_needed=10,
-            vehicle_mpg=25,
-        )
-
-        reply = build_gas_stations_reply(
-            result,
-            language=session.language,
-            fuel_type=session.fuel_type,
-            sort=session.sort,
-            max_distance_miles=session.max_distance_miles,
         )
 
         send_text_message(
