@@ -112,6 +112,55 @@ def deduplicate_stations(stations: list) -> list:
     return list(unique_stations.values())
 
 
+def _candidate_diagnostic_lines(
+    stations: list,
+    *,
+    fuel_type: str,
+    raw_candidate_count: int,
+) -> list[str]:
+    lines = [
+        (
+            "[GooglePlaces diagnostics] "
+            f"raw_candidates={raw_candidate_count} "
+            f"parsed_candidates={len(stations)} fuel={fuel_type}"
+        )
+    ]
+
+    for index, station in enumerate(stations, start=1):
+        selected_fuel = station["selected_fuel"]
+        available = selected_fuel["available"]
+        price = selected_fuel.get("price")
+        status = "KEEP" if available else "REMOVED_NO_PRICE"
+        distance = station.get("distance_miles")
+        distance_text = f"{distance:.2f}mi" if distance is not None else "unknown"
+
+        lines.append(
+            (
+                f"[GooglePlaces diagnostics] {index:02d}. "
+                f"{station.get('name', 'Unknown gas station')} | "
+                f"price={price} | status={status} | "
+                f"distance={distance_text} | "
+                f"address={station.get('address', 'Address not available')}"
+            )
+        )
+
+    return lines
+
+
+def _log_candidate_diagnostics(
+    stations: list,
+    *,
+    fuel_type: str,
+    raw_candidate_count: int,
+) -> None:
+    for line in _candidate_diagnostic_lines(
+        stations,
+        fuel_type=fuel_type,
+        raw_candidate_count=raw_candidate_count,
+    ):
+        print(line, flush=True)
+
+
 def _search_nearby_gas_stations(
     latitude: float,
     longitude: float,
@@ -211,6 +260,13 @@ def _search_nearby_gas_stations(
     places = data.get("places", [])
 
     if not places:
+        print(
+            (
+                "[GooglePlaces diagnostics] raw_candidates=0 "
+                f"parsed_candidates=0 fuel={fuel_type}"
+            ),
+            flush=True,
+        )
         return {
             "stations": [],
             "count": 0,
@@ -284,6 +340,12 @@ def _search_nearby_gas_stations(
         }
 
         stations.append(station)
+
+    _log_candidate_diagnostics(
+        stations,
+        fuel_type=fuel_type,
+        raw_candidate_count=len(places),
+    )
 
     stations = deduplicate_stations(stations)
     stations = [
