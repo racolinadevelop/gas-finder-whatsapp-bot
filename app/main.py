@@ -16,3 +16,8 @@ app.include_router(whatsapp_router)
 @app.get("/")
 def root():
     return {"message": "Gas Finder API is running"}
+
+
+@app.get("/health", tags=["health"])
+def health():
+    return {"status": "ok"}
