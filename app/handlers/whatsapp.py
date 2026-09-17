@@ -12,10 +12,30 @@ from app.conversation import (
     get_previous_state,
     parse_navigation_action,
 )
+from app.conversation.options import (
+    CUSTOM_DISTANCE_ID,
+    DISTANCE_OPTIONS,
+    FUEL_BUTTONS,
+    LANGUAGE_BUTTONS,
+    SORT_BUTTONS,
+)
 from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
+from app.presentation import (
+    ListPrompt,
+    Prompt,
+    ReplyButtonsPrompt,
+    TextPrompt,
+    build_custom_distance_prompt,
+    build_distance_prompt,
+    build_fuel_prompt,
+    build_language_prompt,
+    build_location_prompt,
+    build_sort_prompt,
+    build_state_prompt,
+)
 from app.routing import ConversationStateRouter, MessageRouter
 from app.providers import GasStationProviderError
 from app.services.stations import search_nearby_gas_stations
@@ -38,85 +58,35 @@ GREETINGS = {
     "good evening",
 }
 
-LANGUAGE_BUTTONS = {
-    "lang_en": "en",
-    "lang_es": "es",
-}
-
-FUEL_BUTTONS = {
-    "fuel_regular": "regular",
-    "fuel_premium": "premium",
-    "fuel_diesel": "diesel",
-}
-
-SORT_BUTTONS = {
-    "sort_distance": "distance",
-    "sort_price": "price",
-    "sort_best": "best",
-}
-
-DISTANCE_OPTIONS = {
-    "distance_1": 1.0,
-    "distance_3": 3.0,
-    "distance_5": 5.0,
-    "distance_10": 10.0,
-}
-CUSTOM_DISTANCE_ID = "distance_custom"
-
-FUEL_NAMES = {
-    "en": {
-        "regular": "Regular",
-        "premium": "Premium",
-        "diesel": "Diesel",
-    },
-    "es": {
-        "regular": "Regular",
-        "premium": "Premium",
-        "diesel": "Diésel",
-    },
-}
-
-SORT_NAMES = {
-    "en": {
-        "distance": "Closest",
-        "price": "Cheapest",
-        "best": "Best",
-    },
-    "es": {
-        "distance": "Más cerca",
-        "price": "Más barato",
-        "best": "Mejor opción",
-    },
-}
-
 conversation_store = InMemoryConversationStore()
 intent_interpreter = build_intent_interpreter()
 subscription_service = SubscriptionService()
 
 
-def send_language_prompt(sender: str, error: bool = False) -> None:
-    body_text = (
-        f"{t('en', 'invalid_language' if error else 'choose_language')}\n\n"
-        f"{t('en', 'navigation_hint')}"
-    )
-
+def send_prompt(sender: str, prompt: Prompt) -> None:
     try:
-        send_reply_buttons(
-            to=sender,
-            body_text=body_text,
-            buttons=[
-                {
-                    "id": "lang_en",
-                    "title": "English",
-                },
-                {
-                    "id": "lang_es",
-                    "title": "Español",
-                },
-            ],
-        )
+        if isinstance(prompt, ReplyButtonsPrompt):
+            send_reply_buttons(
+                to=sender,
+                body_text=prompt.body_text,
+                buttons=prompt.buttons,
+            )
+        elif isinstance(prompt, ListPrompt):
+            send_list_message(
+                to=sender,
+                body_text=prompt.body_text,
+                button_text=prompt.button_text,
+                section_title=prompt.section_title,
+                rows=prompt.rows,
+            )
+        elif isinstance(prompt, TextPrompt):
+            send_text_message(to=sender, message=prompt.message)
     except WhatsAppServiceError as exc:
-        print(f"Could not send language buttons: {exc}")
+        print(f"Could not send conversation prompt: {exc}")
+
+
+def send_language_prompt(sender: str, error: bool = False) -> None:
+    send_prompt(sender, build_language_prompt(error=error))
 
 
 def send_fuel_prompt(
@@ -125,37 +95,10 @@ def send_fuel_prompt(
     welcome: bool = False,
     error: bool = False,
 ) -> None:
-    body_parts = []
-
-    if welcome:
-        body_parts.append(t(language, "welcome"))
-    if error:
-        body_parts.append(t(language, "invalid_fuel"))
-
-    body_parts.append(t(language, "choose_fuel"))
-    body_parts.append(t(language, "navigation_hint"))
-
-    try:
-        send_reply_buttons(
-            to=sender,
-            body_text="\n\n".join(body_parts),
-            buttons=[
-                {
-                    "id": "fuel_regular",
-                    "title": t(language, "button_fuel_regular"),
-                },
-                {
-                    "id": "fuel_premium",
-                    "title": t(language, "button_fuel_premium"),
-                },
-                {
-                    "id": "fuel_diesel",
-                    "title": t(language, "button_fuel_diesel"),
-                },
-            ],
-        )
-    except WhatsAppServiceError as exc:
-        print(f"Could not send fuel buttons: {exc}")
+    send_prompt(
+        sender,
+        build_fuel_prompt(language, welcome=welcome, error=error),
+    )
 
 
 def send_sort_prompt(
@@ -164,44 +107,10 @@ def send_sort_prompt(
     selected: bool = False,
     error: bool = False,
 ) -> None:
-    language = session.language
-    body_parts = []
-
-    if selected:
-        body_parts.append(
-            t(
-                language,
-                "fuel_selected",
-                fuel=FUEL_NAMES[language][session.fuel_type],
-            )
-        )
-    if error:
-        body_parts.append(t(language, "invalid_sort"))
-
-    body_parts.append(t(language, "choose_sort"))
-    body_parts.append(t(language, "navigation_hint"))
-
-    try:
-        send_reply_buttons(
-            to=sender,
-            body_text="\n\n".join(body_parts),
-            buttons=[
-                {
-                    "id": "sort_distance",
-                    "title": t(language, "button_sort_distance"),
-                },
-                {
-                    "id": "sort_price",
-                    "title": t(language, "button_sort_price"),
-                },
-                {
-                    "id": "sort_best",
-                    "title": t(language, "button_sort_best"),
-                },
-            ],
-        )
-    except WhatsAppServiceError as exc:
-        print(f"Could not send sort buttons: {exc}")
+    send_prompt(
+        sender,
+        build_sort_prompt(session, selected=selected, error=error),
+    )
 
 
 def send_distance_prompt(
@@ -209,39 +118,7 @@ def send_distance_prompt(
     session: ConversationSession,
     error: bool = False,
 ) -> None:
-    language = session.language
-    body_parts = []
-
-    if error:
-        body_parts.append(t(language, "invalid_distance_option"))
-    body_parts.append(t(language, "choose_distance"))
-    body_parts.append(t(language, "navigation_hint"))
-
-    rows = [
-        {
-            "id": f"distance_{distance}",
-            "title": f"📏 {distance} mi",
-        }
-        for distance in (1, 3, 5, 10)
-    ]
-    rows.append(
-        {
-            "id": CUSTOM_DISTANCE_ID,
-            "title": t(language, "distance_custom_title"),
-            "description": t(language, "distance_custom_description"),
-        }
-    )
-
-    try:
-        send_list_message(
-            to=sender,
-            body_text="\n\n".join(body_parts),
-            button_text=t(language, "distance_list_button"),
-            section_title=t(language, "distance_section_title"),
-            rows=rows,
-        )
-    except WhatsAppServiceError as exc:
-        print(f"Could not send distance list: {exc}")
+    send_prompt(sender, build_distance_prompt(session, error=error))
 
 
 def send_custom_distance_prompt(
@@ -250,34 +127,14 @@ def send_custom_distance_prompt(
     error: bool = False,
     range_error: bool = False,
 ) -> None:
-    parts = []
-    if error:
-        parts.append(t(language, "invalid_custom_distance"))
-    if range_error:
-        parts.append(
-            t(
-                language,
-                "invalid_max_distance",
-                minimum=MIN_DISTANCE_MILES,
-                maximum=MAX_DISTANCE_MILES,
-            )
-        )
-    parts.extend(
-        [
-            t(
-                language,
-                "custom_distance_prompt",
-                minimum=MIN_DISTANCE_MILES,
-                maximum=MAX_DISTANCE_MILES,
-            ),
-            t(language, "navigation_hint"),
-        ]
+    send_prompt(
+        sender,
+        build_custom_distance_prompt(
+            language,
+            error=error,
+            range_error=range_error,
+        ),
     )
-
-    try:
-        send_text_message(to=sender, message="\n\n".join(parts))
-    except WhatsAppServiceError as exc:
-        print(f"Could not send custom distance prompt: {exc}")
 
 
 def parse_distance_input(text: str) -> float | None:
@@ -316,33 +173,7 @@ def send_location_prompt(
     session: ConversationSession,
     saved: bool = False,
 ) -> None:
-    language = session.language
-
-    if saved:
-        message = t(
-            language,
-            "preferences_saved",
-            fuel=FUEL_NAMES[language][session.fuel_type],
-            sort=SORT_NAMES[language][session.sort],
-        )
-    else:
-        message = t(language, "invalid_location")
-
-    message = f"{message}\n\n{t(language, 'navigation_hint')}"
-
-    if session.max_distance_miles is not None:
-        message = (
-            f"{message}\n\n"
-            f"{t(language, 'max_distance_saved', distance=session.max_distance_miles)}"
-        )
-
-    try:
-        send_text_message(
-            to=sender,
-            message=message,
-        )
-    except WhatsAppServiceError as exc:
-        print(f"Could not send WhatsApp reply: {exc}")
+    send_prompt(sender, build_location_prompt(session, saved=saved))
 
 
 def send_state_prompt(
@@ -350,21 +181,7 @@ def send_state_prompt(
     session: ConversationSession,
     error: bool = False,
 ) -> None:
-    if session.state in {
-        ConversationState.NEW,
-        ConversationState.WAITING_LANGUAGE,
-    }:
-        send_language_prompt(sender, error=error)
-    elif session.state == ConversationState.WAITING_FUEL:
-        send_fuel_prompt(sender, session.language, error=error)
-    elif session.state == ConversationState.WAITING_SORT:
-        send_sort_prompt(sender, session, error=error)
-    elif session.state == ConversationState.WAITING_DISTANCE:
-        send_distance_prompt(sender, session, error=error)
-    elif session.state == ConversationState.WAITING_CUSTOM_DISTANCE:
-        send_custom_distance_prompt(sender, session.language, error=error)
-    elif session.state == ConversationState.WAITING_LOCATION:
-        send_location_prompt(sender, session)
+    send_prompt(sender, build_state_prompt(session, error=error))
 
 
 def send_expected_prompt(sender: str, session: ConversationSession) -> None:

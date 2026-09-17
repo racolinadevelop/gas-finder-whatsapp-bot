@@ -1,0 +1,272 @@
+from dataclasses import dataclass
+
+from app.constants import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
+from app.conversation.models import ConversationSession, ConversationState
+from app.conversation.options import CUSTOM_DISTANCE_ID
+from app.i18n import t
+
+
+@dataclass(frozen=True, slots=True)
+class TextPrompt:
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class ReplyButtonsPrompt:
+    body_text: str
+    buttons: list[dict]
+
+
+@dataclass(frozen=True, slots=True)
+class ListPrompt:
+    body_text: str
+    button_text: str
+    section_title: str
+    rows: list[dict]
+
+
+Prompt = TextPrompt | ReplyButtonsPrompt | ListPrompt
+
+
+FUEL_NAMES = {
+    "en": {
+        "regular": "Regular",
+        "premium": "Premium",
+        "diesel": "Diesel",
+    },
+    "es": {
+        "regular": "Regular",
+        "premium": "Premium",
+        "diesel": "Diésel",
+    },
+}
+
+SORT_NAMES = {
+    "en": {
+        "distance": "Closest",
+        "price": "Cheapest",
+        "best": "Best",
+    },
+    "es": {
+        "distance": "Más cerca",
+        "price": "Más barato",
+        "best": "Mejor opción",
+    },
+}
+
+
+def build_language_prompt(error: bool = False) -> ReplyButtonsPrompt:
+    return ReplyButtonsPrompt(
+        body_text=(
+            f"{t('en', 'invalid_language' if error else 'choose_language')}"
+            f"\n\n{t('en', 'navigation_hint')}"
+        ),
+        buttons=[
+            {"id": "lang_en", "title": "English"},
+            {"id": "lang_es", "title": "Español"},
+        ],
+    )
+
+
+def build_fuel_prompt(
+    language: str,
+    welcome: bool = False,
+    error: bool = False,
+) -> ReplyButtonsPrompt:
+    body_parts = []
+
+    if welcome:
+        body_parts.append(t(language, "welcome"))
+    if error:
+        body_parts.append(t(language, "invalid_fuel"))
+
+    body_parts.extend(
+        [
+            t(language, "choose_fuel"),
+            t(language, "navigation_hint"),
+        ]
+    )
+
+    return ReplyButtonsPrompt(
+        body_text="\n\n".join(body_parts),
+        buttons=[
+            {
+                "id": "fuel_regular",
+                "title": t(language, "button_fuel_regular"),
+            },
+            {
+                "id": "fuel_premium",
+                "title": t(language, "button_fuel_premium"),
+            },
+            {
+                "id": "fuel_diesel",
+                "title": t(language, "button_fuel_diesel"),
+            },
+        ],
+    )
+
+
+def build_sort_prompt(
+    session: ConversationSession,
+    selected: bool = False,
+    error: bool = False,
+) -> ReplyButtonsPrompt:
+    language = session.language
+    body_parts = []
+
+    if selected:
+        body_parts.append(
+            t(
+                language,
+                "fuel_selected",
+                fuel=FUEL_NAMES[language][session.fuel_type],
+            )
+        )
+    if error:
+        body_parts.append(t(language, "invalid_sort"))
+
+    body_parts.extend(
+        [
+            t(language, "choose_sort"),
+            t(language, "navigation_hint"),
+        ]
+    )
+
+    return ReplyButtonsPrompt(
+        body_text="\n\n".join(body_parts),
+        buttons=[
+            {
+                "id": "sort_distance",
+                "title": t(language, "button_sort_distance"),
+            },
+            {
+                "id": "sort_price",
+                "title": t(language, "button_sort_price"),
+            },
+            {
+                "id": "sort_best",
+                "title": t(language, "button_sort_best"),
+            },
+        ],
+    )
+
+
+def build_distance_prompt(
+    session: ConversationSession,
+    error: bool = False,
+) -> ListPrompt:
+    language = session.language
+    body_parts = []
+
+    if error:
+        body_parts.append(t(language, "invalid_distance_option"))
+    body_parts.extend(
+        [
+            t(language, "choose_distance"),
+            t(language, "navigation_hint"),
+        ]
+    )
+
+    rows = [
+        {
+            "id": f"distance_{distance}",
+            "title": f"📏 {distance} mi",
+        }
+        for distance in (1, 3, 5, 10)
+    ]
+    rows.append(
+        {
+            "id": CUSTOM_DISTANCE_ID,
+            "title": t(language, "distance_custom_title"),
+            "description": t(language, "distance_custom_description"),
+        }
+    )
+
+    return ListPrompt(
+        body_text="\n\n".join(body_parts),
+        button_text=t(language, "distance_list_button"),
+        section_title=t(language, "distance_section_title"),
+        rows=rows,
+    )
+
+
+def build_custom_distance_prompt(
+    language: str,
+    error: bool = False,
+    range_error: bool = False,
+) -> TextPrompt:
+    parts = []
+
+    if error:
+        parts.append(t(language, "invalid_custom_distance"))
+    if range_error:
+        parts.append(
+            t(
+                language,
+                "invalid_max_distance",
+                minimum=MIN_DISTANCE_MILES,
+                maximum=MAX_DISTANCE_MILES,
+            )
+        )
+
+    parts.extend(
+        [
+            t(
+                language,
+                "custom_distance_prompt",
+                minimum=MIN_DISTANCE_MILES,
+                maximum=MAX_DISTANCE_MILES,
+            ),
+            t(language, "navigation_hint"),
+        ]
+    )
+
+    return TextPrompt(message="\n\n".join(parts))
+
+
+def build_location_prompt(
+    session: ConversationSession,
+    saved: bool = False,
+) -> TextPrompt:
+    language = session.language
+
+    if saved:
+        message = t(
+            language,
+            "preferences_saved",
+            fuel=FUEL_NAMES[language][session.fuel_type],
+            sort=SORT_NAMES[language][session.sort],
+        )
+    else:
+        message = t(language, "invalid_location")
+
+    message = f"{message}\n\n{t(language, 'navigation_hint')}"
+
+    if session.max_distance_miles is not None:
+        message = (
+            f"{message}\n\n"
+            f"{t(language, 'max_distance_saved', distance=session.max_distance_miles)}"
+        )
+
+    return TextPrompt(message=message)
+
+
+def build_state_prompt(
+    session: ConversationSession,
+    error: bool = False,
+) -> Prompt:
+    if session.state in {
+        ConversationState.NEW,
+        ConversationState.WAITING_LANGUAGE,
+    }:
+        return build_language_prompt(error=error)
+    if session.state == ConversationState.WAITING_FUEL:
+        return build_fuel_prompt(session.language, error=error)
+    if session.state == ConversationState.WAITING_SORT:
+        return build_sort_prompt(session, error=error)
+    if session.state == ConversationState.WAITING_DISTANCE:
+        return build_distance_prompt(session, error=error)
+    if session.state == ConversationState.WAITING_CUSTOM_DISTANCE:
+        return build_custom_distance_prompt(session.language, error=error)
+
+    return build_location_prompt(session)
