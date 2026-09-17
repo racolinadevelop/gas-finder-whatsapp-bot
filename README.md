@@ -2,7 +2,7 @@
 
 A backend project built with Python and FastAPI that helps users find nearby gas stations, compare available fuel prices, and receive the results directly through WhatsApp.
 
-The application is connected to the Meta WhatsApp Business Platform and uses Google Places API (New) to retrieve real gas station information.
+The application is connected to the Meta WhatsApp Business Platform and can use Google Places API (New) or HERE Fuel Prices API to retrieve real gas station information.
 
 ## Live API
 
@@ -29,7 +29,7 @@ Railway
       ↓
 FastAPI
       ↓
-Google Places API
+Configured station provider
       ↓
 Gas station results
       ↓
@@ -40,7 +40,7 @@ WhatsApp response
 
 - Search nearby gas stations using latitude and longitude
 - Receive user location directly from WhatsApp
-- Retrieve real gas station information from Google Places
+- Retrieve real gas station information from the configured provider
 - Retrieve available fuel prices
 - Support:
   - Regular
@@ -56,7 +56,10 @@ WhatsApp response
   - Distance
   - Gallons needed
   - Vehicle MPG
-- Handle stations without available fuel prices
+- Evaluate a larger candidate set before selecting the displayed results
+- Exclude stations without a price for the selected fuel
+- Deduplicate provider results that represent the same address
+- Switch between Google Places and HERE Fuel Prices through configuration
 - Validate API query parameters
 - Handle Google Places errors and timeouts
 - Receive WhatsApp webhook events
@@ -81,6 +84,7 @@ WhatsApp response
 - Pydantic
 - HTTPX
 - Google Places API (New)
+- HERE Fuel Prices API v3
 - Meta WhatsApp Business Platform
 - Railway
 - python-dotenv
@@ -103,11 +107,13 @@ gas-finder-whatsapp-bot/
 │   │   └── models.py
 │   ├── models/
 │   ├── parsers/
+│   ├── providers/
 │   ├── routers/
 │   ├── routing/
 │   ├── subscriptions/
 │   ├── services/
 │   │   ├── google_places.py
+│   │   ├── stations.py
 │   │   └── whatsapp.py
 │   └── utils/
 ├── docs/
@@ -167,6 +173,8 @@ Configure:
 
 ```env
 GOOGLE_MAPS_API_KEY=
+GAS_STATION_PROVIDER=google
+HERE_API_KEY=
 
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_PHONE_NUMBER_ID=
@@ -176,6 +184,23 @@ WHATSAPP_VERIFY_TOKEN=
 ```
 
 Never commit `.env`.
+
+### Gas-station data provider
+
+Google remains the default provider. It now fetches up to 20 nearby candidates,
+then removes duplicates and stations without a price before sorting and showing
+the requested number of results.
+
+To test HERE Fuel Prices instead, obtain a HERE API key and configure:
+
+```env
+GAS_STATION_PROVIDER=here
+HERE_API_KEY=your_here_api_key
+```
+
+Only one provider is active at a time. Compare both providers at the same
+location, radius, fuel type, and time before changing production. See
+`docs/GAS_STATION_PROVIDERS.md` for the verification checklist.
 
 ### Optional AI intent fallback
 

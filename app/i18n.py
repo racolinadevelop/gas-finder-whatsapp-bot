@@ -120,7 +120,8 @@ TRANSLATIONS = {
         ),
 
         "no_results": (
-            "I couldn't find nearby gas stations for this search.\n\n"
+            "I couldn't find nearby gas stations with an available price "
+            "for this search.\n\n"
             "⛽ Fuel type: {fuel}\n"
             "🏷️ Category: {sort}"
         ),
@@ -273,7 +274,8 @@ TRANSLATIONS = {
         ),
 
         "no_results": (
-            "No encontré gasolineras cercanas para esta búsqueda.\n\n"
+            "No encontré gasolineras cercanas con precio disponible para "
+            "esta búsqueda.\n\n"
             "⛽ Combustible: {fuel}\n"
             "🏷️ Categoría: {sort}"
         ),

@@ -14,10 +14,8 @@ from app.intelligence.models import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
 from app.routing import MessageRouter
-from app.services.google_places import (
-    GooglePlacesServiceError,
-    search_nearby_gas_stations,
-)
+from app.providers import GasStationProviderError
+from app.services.stations import search_nearby_gas_stations
 from app.services.whatsapp import (
     WhatsAppServiceError,
     build_gas_stations_reply,
@@ -744,7 +742,7 @@ def handle_location_message(incoming_message: IncomingMessage) -> None:
             to=sender,
             message=reply,
         )
-    except GooglePlacesServiceError as exc:
+    except GasStationProviderError as exc:
         print(f"Unable to search gas stations: {exc}")
     except WhatsAppServiceError as exc:
         print(f"Unable to send WhatsApp reply: {exc}")

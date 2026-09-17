@@ -1,17 +1,16 @@
 import httpx
 
 from app.config import GOOGLE_MAPS_API_KEY
+from app.providers import GasStationProviderError
 from app.utils.distance import calculate_distance_miles
 from app.utils.cost import calculate_estimated_cost
 
 GOOGLE_PLACES_NEARBY_URL = "https://places.googleapis.com/v1/places:searchNearby"
+GOOGLE_CANDIDATE_LIMIT = 20
 
 
-class GooglePlacesServiceError(Exception):
-    def __init__(self, message: str, status_code: int = 502):
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
+class GooglePlacesServiceError(GasStationProviderError):
+    pass
 
 
 def parse_fuel_prices(fuel_prices: list) -> dict:
@@ -75,7 +74,45 @@ def sort_stations(stations: list, sort: str) -> list:
     return stations
 
 
-def search_nearby_gas_stations(
+def _station_identity(station: dict) -> tuple:
+    address = " ".join(station.get("address", "").lower().split())
+
+    if address and address != "address not available":
+        return ("address", address)
+
+    return (
+        "location",
+        round(station["latitude"], 4),
+        round(station["longitude"], 4),
+    )
+
+
+def _prefer_station(candidate: dict, current: dict) -> bool:
+    candidate_fuel = candidate["selected_fuel"]
+    current_fuel = current["selected_fuel"]
+
+    if candidate_fuel["available"] != current_fuel["available"]:
+        return candidate_fuel["available"]
+
+    return (candidate_fuel.get("updated_at") or "") > (
+        current_fuel.get("updated_at") or ""
+    )
+
+
+def deduplicate_stations(stations: list) -> list:
+    unique_stations = {}
+
+    for station in stations:
+        identity = _station_identity(station)
+        current = unique_stations.get(identity)
+
+        if current is None or _prefer_station(station, current):
+            unique_stations[identity] = station
+
+    return list(unique_stations.values())
+
+
+def _search_nearby_gas_stations(
     latitude: float,
     longitude: float,
     radius: float = 5000,
@@ -99,7 +136,10 @@ def search_nearby_gas_stations(
 
     payload = {
         "includedTypes": ["gas_station"],
-        "maxResultCount": limit,
+        # Google ranks this candidate set by distance. We deliberately request
+        # the maximum allowed number and only apply the user-facing limit after
+        # filtering, deduplication and our own price/best sorting.
+        "maxResultCount": GOOGLE_CANDIDATE_LIMIT,
         "rankPreference": "DISTANCE",
         "locationRestriction": {
             "circle": {
@@ -245,7 +285,11 @@ def search_nearby_gas_stations(
 
         stations.append(station)
 
-    stations = sort_stations(stations, sort)
+    stations = deduplicate_stations(stations)
+    stations = [
+        station for station in stations if station["selected_fuel"]["available"]
+    ]
+    stations = sort_stations(stations, sort)[:limit]
 
     return {
         "stations": stations,
@@ -254,3 +298,16 @@ def search_nearby_gas_stations(
             "Gas stations found." if stations else "No valid gas stations found."
         ),
     }
+
+
+class GooglePlacesProvider:
+    """Provider adapter that preserves the current Google implementation."""
+
+    def search_nearby(self, **kwargs) -> dict:
+        return _search_nearby_gas_stations(**kwargs)
+
+
+def search_nearby_gas_stations(**kwargs) -> dict:
+    """Compatibility entry point used by the API and WhatsApp handlers."""
+
+    return GooglePlacesProvider().search_nearby(**kwargs)

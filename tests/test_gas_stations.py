@@ -3,6 +3,7 @@ from app.conversation import ConversationSession, ConversationState
 from app.main import app
 from app.services.google_places import (
     GooglePlacesServiceError,
+    search_nearby_gas_stations,
     sort_stations,
 )
 from app.utils.cost import calculate_estimated_cost
@@ -17,8 +18,178 @@ from app.services.whatsapp import (
     WhatsAppServiceError,
 )
 from app.i18n import t
+from app.providers.here import HereFuelPricesProvider
 
 client = TestClient(app)
+
+
+class FakeGoogleResponse:
+    def __init__(self, places):
+        self._places = places
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {"places": self._places}
+
+
+class FakeHereResponse(FakeGoogleResponse):
+    def json(self):
+        return {"stations": self._places}
+
+
+def google_place(
+    place_id,
+    name,
+    address,
+    latitude,
+    longitude,
+    price=None,
+):
+    place = {
+        "id": place_id,
+        "displayName": {"text": name},
+        "formattedAddress": address,
+        "location": {
+            "latitude": latitude,
+            "longitude": longitude,
+        },
+    }
+    if price is not None:
+        units = int(price)
+        nanos = round((price - units) * 1_000_000_000)
+        place["fuelOptions"] = {
+            "fuelPrices": [
+                {
+                    "type": "REGULAR_UNLEADED",
+                    "price": {
+                        "units": units,
+                        "nanos": nanos,
+                        "currencyCode": "USD",
+                    },
+                    "updateTime": "2026-09-17T12:00:00Z",
+                }
+            ]
+        }
+    return place
+
+
+def test_search_evaluates_more_candidates_before_selecting_results(monkeypatch):
+    captured_payload = {}
+    places = [
+        google_place("1", "Nearest", "1 Main St", 38.2501, -85.7501, 4.10),
+        google_place("2", "No price", "2 Main St", 38.2502, -85.7502),
+        google_place("3", "Duplicate A", "3 Main St", 38.2503, -85.7503),
+        google_place("4", "Duplicate B", "3 Main St", 38.2503, -85.7503, 4.20),
+        google_place("5", "Another no price", "5 Main St", 38.2505, -85.7505),
+        google_place("6", "Sam's Club", "4901 Outer Loop", 38.2510, -85.7510, 2.79),
+    ]
+
+    def fake_post(url, headers, json, timeout):
+        captured_payload.update(json)
+        return FakeGoogleResponse(places)
+
+    monkeypatch.setattr("app.services.google_places.httpx.post", fake_post)
+
+    result = search_nearby_gas_stations(
+        latitude=38.25,
+        longitude=-85.75,
+        radius=16093.44,
+        fuel_type="regular",
+        sort="price",
+        limit=5,
+    )
+
+    assert captured_payload["maxResultCount"] == 20
+    assert result["stations"][0]["name"] == "Sam's Club"
+    assert all(
+        station["selected_fuel"]["available"] for station in result["stations"]
+    )
+    assert [station["address"] for station in result["stations"]].count(
+        "3 Main St"
+    ) == 1
+
+
+def test_search_applies_display_limit_after_price_filtering(monkeypatch):
+    places = [
+        google_place(
+            str(index),
+            f"Station {index}",
+            f"{index} Main St",
+            38.25 + (index / 10_000),
+            -85.75,
+            3 + (index / 100),
+        )
+        for index in range(1, 8)
+    ]
+
+    monkeypatch.setattr(
+        "app.services.google_places.httpx.post",
+        lambda *args, **kwargs: FakeGoogleResponse(places),
+    )
+
+    result = search_nearby_gas_stations(
+        latitude=38.25,
+        longitude=-85.75,
+        sort="price",
+        limit=5,
+    )
+
+    assert result["count"] == 5
+    assert len(result["stations"]) == 5
+
+
+def test_here_provider_requests_prices_and_normalizes_results(monkeypatch):
+    captured_params = {}
+    stations = [
+        {
+            "id": "here-1",
+            "name": "Sam's Club",
+            "distance": 3218,
+            "address": {"label": "4901 Outer Loop, Louisville, KY"},
+            "position": {"lat": 38.14, "lng": -85.66},
+            "prices": [
+                {
+                    "fuelType": "2",
+                    "price": 2.79,
+                    "currency": "USD",
+                    "available": True,
+                    "modified": "2026-09-17T12:00:00Z",
+                }
+            ],
+        },
+        {
+            "id": "here-2",
+            "name": "Unknown price",
+            "distance": 100,
+            "address": {"label": "1 Main St"},
+            "position": {"lat": 38.25, "lng": -85.75},
+            "prices": [],
+        },
+    ]
+
+    def fake_get(url, params, timeout):
+        captured_params.update(params)
+        return FakeHereResponse(stations)
+
+    monkeypatch.setattr("app.providers.here.httpx.get", fake_get)
+
+    result = HereFuelPricesProvider(api_key="test-key").search_nearby(
+        latitude=38.25,
+        longitude=-85.75,
+        radius=16093.44,
+        fuel_type="regular",
+        sort="price",
+        limit=5,
+    )
+
+    assert captured_params["fuelTypes"] == "2"
+    assert captured_params["returnAllStations"] == "false"
+    assert captured_params["limit"] == 50
+    assert result["count"] == 1
+    assert result["stations"][0]["name"] == "Sam's Club"
+    assert result["stations"][0]["selected_fuel"]["price"] == 2.79
 
 
 def test_invalid_latitude():

@@ -3,10 +3,8 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import GasStationsResponse
-from app.services.google_places import (
-    GooglePlacesServiceError,
-    search_nearby_gas_stations,
-)
+from app.providers import GasStationProviderError
+from app.services.stations import search_nearby_gas_stations
 
 router = APIRouter(prefix="/api/v1/gas-stations", tags=["gas-stations"])
 
@@ -36,7 +34,7 @@ def get_nearby_gas_stations(
             gallons_needed=gallons_needed,
             vehicle_mpg=vehicle_mpg,
         )
-    except GooglePlacesServiceError as exc:
+    except GasStationProviderError as exc:
         raise HTTPException(
             status_code=exc.status_code,
             detail=exc.message,
