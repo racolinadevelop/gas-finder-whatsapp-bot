@@ -4,7 +4,10 @@ from app.subscriptions.models import (
     SubscriptionStatus,
     UserSubscription,
 )
-from app.subscriptions.store import InMemorySubscriptionStore
+from app.subscriptions.store import (
+    InMemorySubscriptionStore,
+    SubscriptionStore,
+)
 
 
 FREE_FEATURES = frozenset(
@@ -23,7 +26,7 @@ class SubscriptionService:
 
     def __init__(
         self,
-        store: InMemorySubscriptionStore | None = None,
+        store: SubscriptionStore | None = None,
     ) -> None:
         self.store = store or InMemorySubscriptionStore()
 

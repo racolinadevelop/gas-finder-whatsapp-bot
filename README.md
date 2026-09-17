@@ -87,6 +87,9 @@ WhatsApp response
 - HERE Fuel Prices API v3
 - Meta WhatsApp Business Platform
 - Railway
+- Redis
+- PostgreSQL
+- Psycopg
 - python-dotenv
 - pytest
 - Git
@@ -187,6 +190,9 @@ REDIS_URL=
 REDIS_KEY_PREFIX=gas-finder
 CONVERSATION_TTL_SECONDS=604800
 WHATSAPP_DEDUP_TTL_SECONDS=86400
+
+# Optional locally; use Railway PostgreSQL in production for subscriptions.
+DATABASE_URL=
 ```
 
 Never commit `.env`.
@@ -231,9 +237,11 @@ directions, and basic comparison available for free. Future features such as
 favorites, price alerts, price history, advanced comparisons, and personalized
 recommendations are defined as Premium capabilities.
 
-Subscription records are currently stored in memory and reset when the app
-restarts. No payment provider or real billing is connected yet; persistent
-storage and Stripe Sandbox can be added behind the same service later.
+Subscription records use PostgreSQL when `DATABASE_URL` is configured.
+Without it, local development and tests continue to use in-memory storage.
+The PostgreSQL table is created automatically at startup and stores a SHA-256
+identifier instead of the raw WhatsApp ID. No payment provider or real billing
+is connected yet; Stripe Sandbox can be added behind the same service later.
 
 ## Run Locally
 
@@ -418,6 +426,11 @@ be changed with the environment variables shown above. The application checks
 the Redis connection during startup so an invalid configuration fails before
 it begins accepting webhooks.
 
+For persistent Free/Premium state, add a PostgreSQL service to the Railway
+project and expose its connection URL to the application as `DATABASE_URL`.
+When configured, the app creates the subscription table automatically and
+uses PostgreSQL instead of in-memory subscription storage.
+
 Cloudflare Quick Tunnel was used during early development but is no longer required for production.
 
 ## Current Production Status
@@ -439,6 +452,7 @@ Railway deployment ✅
 Stable production URL ✅
 Redis-ready persistent conversation state ✅
 Redis-ready cross-instance webhook deduplication ✅
+PostgreSQL-ready persistent subscription state ✅
 ```
 
 ## Current Limitations
@@ -464,7 +478,6 @@ Planned features include:
   - best
 - User preferences
 - Actual driving distance
-- PostgreSQL database
 - Search history
 - Favorite gas stations
 - Fuel price alerts
