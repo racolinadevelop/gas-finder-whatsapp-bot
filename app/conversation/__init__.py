@@ -14,10 +14,12 @@ from app.conversation.search_flow import (
     decide_search_flow,
 )
 from app.conversation.store import InMemoryConversationStore
+from app.conversation.transitions import ConversationTransitions
 
 __all__ = [
     "ConversationSession",
     "ConversationState",
+    "ConversationTransitions",
     "InMemoryConversationStore",
     "NavigationAction",
     "SearchFlowDecision",
