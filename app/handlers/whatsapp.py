@@ -266,21 +266,35 @@ def search_from_location(
         return
 
     try:
-        conversation_transitions.finish(sender)
         reply = location_search_service.search(
             session=session,
             latitude=latitude,
             longitude=longitude,
         )
+    except GasStationProviderError as exc:
+        print(f"Unable to search gas stations: {exc}")
+        try:
+            send_text_message(
+                to=sender,
+                message=t(
+                    session.language,
+                    "search_temporarily_unavailable",
+                ),
+            )
+        except WhatsAppServiceError as send_exc:
+            print(f"Unable to send search error reply: {send_exc}")
+        return
 
+    try:
         send_text_message(
             to=sender,
             message=reply,
         )
-    except GasStationProviderError as exc:
-        print(f"Unable to search gas stations: {exc}")
     except WhatsAppServiceError as exc:
         print(f"Unable to send WhatsApp reply: {exc}")
+        return
+
+    conversation_transitions.finish(sender)
 
 
 def handle_location_message(incoming_message: IncomingMessage) -> None:

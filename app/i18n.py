@@ -125,6 +125,11 @@ TRANSLATIONS = {
             "⛽ Fuel type: {fuel}\n"
             "🏷️ Category: {sort}"
         ),
+        "search_temporarily_unavailable": (
+            "⚠️ I couldn't search for gas stations right now. Your search "
+            "preferences are still saved. Please share your location again "
+            "in a moment."
+        ),
         "results_count": (
             "📊 Results shown: {count}"
         ),
@@ -278,6 +283,11 @@ TRANSLATIONS = {
             "esta búsqueda.\n\n"
             "⛽ Combustible: {fuel}\n"
             "🏷️ Categoría: {sort}"
+        ),
+        "search_temporarily_unavailable": (
+            "⚠️ No pude buscar gasolineras en este momento. Tus preferencias "
+            "siguen guardadas. Por favor, comparte tu ubicación nuevamente "
+            "en un momento."
         ),
         "results_count": (
             "📊 Resultados mostrados: {count}"
