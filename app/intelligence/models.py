@@ -7,10 +7,6 @@ class IntentType(StrEnum):
     UNKNOWN = "unknown"
 
 
-MIN_DISTANCE_MILES = 0.1
-MAX_DISTANCE_MILES = 31.0
-
-
 @dataclass(frozen=True, slots=True)
 class MessageInterpretation:
     """Structured meaning extracted from a user's natural-language message."""

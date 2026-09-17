@@ -1,16 +1,19 @@
 import re
 
+from app.constants import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.conversation import (
     ConversationSession,
     ConversationState,
     InMemoryConversationStore,
     NavigationAction,
+    SearchFlowDecision,
+    SearchFlowPrompt,
+    decide_search_flow,
     get_previous_state,
     parse_navigation_action,
 )
 from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
-from app.intelligence.models import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
 from app.routing import ConversationStateRouter, MessageRouter
@@ -409,6 +412,40 @@ def handle_whatsapp_webhook(payload: dict) -> dict:
     return {"status": "ok"}
 
 
+def apply_search_flow_decision(
+    sender: str,
+    decision: SearchFlowDecision,
+) -> None:
+    if decision.prompt == SearchFlowPrompt.INVALID_DISTANCE:
+        try:
+            send_text_message(
+                to=sender,
+                message=t(
+                    decision.language,
+                    "invalid_max_distance",
+                    minimum=MIN_DISTANCE_MILES,
+                    maximum=MAX_DISTANCE_MILES,
+                ),
+            )
+        except WhatsAppServiceError as exc:
+            print(f"Could not send distance validation message: {exc}")
+        return
+
+    session = conversation_store.update(
+        sender,
+        **decision.session_changes,
+    )
+
+    if decision.prompt == SearchFlowPrompt.FUEL:
+        send_fuel_prompt(sender, decision.language)
+    elif decision.prompt == SearchFlowPrompt.SORT:
+        send_sort_prompt(sender, session, selected=decision.selected)
+    elif decision.prompt == SearchFlowPrompt.DISTANCE:
+        send_distance_prompt(sender, session)
+    elif decision.prompt == SearchFlowPrompt.LOCATION:
+        send_location_prompt(sender, session, saved=decision.saved)
+
+
 def handle_text_message(incoming_message: IncomingMessage) -> None:
     sender = incoming_message.sender
     text = incoming_message.text or ""
@@ -437,138 +474,7 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         return
 
     interpretation = intent_interpreter.interpret(text)
-    parsed_preferences = interpretation.search_preferences
-
-    if interpretation.intent == IntentType.SEARCH_GAS:
-        current_session = conversation_store.get(sender)
-        language = (
-            current_session.language
-            if current_session is not None
-            and current_session.state
-            not in {ConversationState.NEW, ConversationState.WAITING_LANGUAGE}
-            else interpretation.language or "en"
-        )
-
-        if (
-            interpretation.max_distance_miles is not None
-            and not MIN_DISTANCE_MILES
-            <= interpretation.max_distance_miles
-            <= MAX_DISTANCE_MILES
-        ):
-            try:
-                send_text_message(
-                    to=sender,
-                    message=t(
-                        language,
-                        "invalid_max_distance",
-                        minimum=MIN_DISTANCE_MILES,
-                        maximum=MAX_DISTANCE_MILES,
-                    ),
-                )
-            except WhatsAppServiceError as exc:
-                print(f"Could not send distance validation message: {exc}")
-            return
-
-        if (
-            current_session is not None
-            and current_session.state == ConversationState.WAITING_FUEL
-            and interpretation.fuel_type is not None
-            and interpretation.sort is None
-        ):
-            session = conversation_store.update(
-                sender,
-                state=ConversationState.WAITING_SORT,
-                language=language,
-                fuel_type=interpretation.fuel_type,
-                **(
-                    {
-                        "max_distance_miles": (
-                            interpretation.max_distance_miles
-                        )
-                    }
-                    if interpretation.max_distance_miles is not None
-                    else {}
-                ),
-            )
-            send_sort_prompt(sender, session, selected=True)
-            return
-
-        if (
-            interpretation.max_distance_miles is not None
-            and interpretation.fuel_type is None
-            and interpretation.sort is None
-        ):
-            if (
-                current_session is not None
-                and current_session.state == ConversationState.WAITING_SORT
-            ):
-                session = conversation_store.update(
-                    sender,
-                    max_distance_miles=interpretation.max_distance_miles,
-                )
-                send_sort_prompt(sender, session)
-                return
-
-            conversation_store.update(
-                sender,
-                state=ConversationState.WAITING_FUEL,
-                language=language,
-                max_distance_miles=interpretation.max_distance_miles,
-            )
-            send_fuel_prompt(sender, language)
-            return
-
-        if (
-            current_session is not None
-            and current_session.state == ConversationState.WAITING_SORT
-            and interpretation.sort is not None
-            and interpretation.fuel_type is None
-        ):
-            next_state = (
-                ConversationState.WAITING_LOCATION
-                if interpretation.max_distance_miles is not None
-                or current_session.max_distance_miles is not None
-                else ConversationState.WAITING_DISTANCE
-            )
-            session = conversation_store.update(
-                sender,
-                state=next_state,
-                language=language,
-                sort=interpretation.sort,
-                **(
-                    {
-                        "max_distance_miles": (
-                            interpretation.max_distance_miles
-                        )
-                    }
-                    if interpretation.max_distance_miles is not None
-                    else {}
-                ),
-            )
-            if next_state == ConversationState.WAITING_LOCATION:
-                send_location_prompt(sender, session, saved=True)
-            else:
-                send_distance_prompt(sender, session)
-            return
-
-        if not parsed_preferences:
-            conversation_store.update(
-                sender,
-                state=ConversationState.WAITING_FUEL,
-                language=language,
-            )
-            send_fuel_prompt(sender, language)
-            return
-
-        session = conversation_store.update(
-            sender,
-            state=ConversationState.WAITING_LOCATION,
-            language=language,
-            **parsed_preferences,
-        )
-
-        send_location_prompt(sender, session, saved=True)
-    else:
+    if interpretation.intent != IntentType.SEARCH_GAS:
         session = conversation_store.get(sender)
 
         if session is None:
@@ -578,6 +484,13 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
             )
 
         send_expected_prompt(sender, session)
+        return
+
+    decision = decide_search_flow(
+        conversation_store.get(sender),
+        interpretation,
+    )
+    apply_search_flow_decision(sender, decision)
 
 
 def handle_interactive_message(incoming_message: IncomingMessage) -> None:
