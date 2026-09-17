@@ -7,6 +7,7 @@ from app.conversation import (
     parse_navigation_action,
 )
 from app.i18n import t
+from app.intelligence import IntentType, RuleBasedIntentInterpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
 from app.routing import MessageRouter
@@ -17,7 +18,6 @@ from app.services.google_places import (
 from app.services.whatsapp import (
     WhatsAppServiceError,
     build_gas_stations_reply,
-    parse_search_preferences,
     send_reply_buttons,
     send_text_message,
 )
@@ -76,6 +76,7 @@ SORT_NAMES = {
 }
 
 conversation_store = InMemoryConversationStore()
+intent_interpreter = RuleBasedIntentInterpreter()
 
 
 def send_language_prompt(sender: str, error: bool = False) -> None:
@@ -297,12 +298,62 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
 
         return
 
-    parsed_preferences = parse_search_preferences(text)
+    interpretation = intent_interpreter.interpret(text)
+    parsed_preferences = interpretation.search_preferences
 
-    if parsed_preferences:
+    if interpretation.intent == IntentType.SEARCH_GAS:
+        current_session = conversation_store.get(sender)
+        language = (
+            current_session.language
+            if current_session is not None
+            and current_session.state
+            not in {ConversationState.NEW, ConversationState.WAITING_LANGUAGE}
+            else interpretation.language or "en"
+        )
+
+        if (
+            current_session is not None
+            and current_session.state == ConversationState.WAITING_FUEL
+            and interpretation.fuel_type is not None
+            and interpretation.sort is None
+        ):
+            session = conversation_store.update(
+                sender,
+                state=ConversationState.WAITING_SORT,
+                language=language,
+                fuel_type=interpretation.fuel_type,
+            )
+            send_sort_prompt(sender, session, selected=True)
+            return
+
+        if (
+            current_session is not None
+            and current_session.state == ConversationState.WAITING_SORT
+            and interpretation.sort is not None
+            and interpretation.fuel_type is None
+        ):
+            session = conversation_store.update(
+                sender,
+                state=ConversationState.WAITING_LOCATION,
+                language=language,
+                sort=interpretation.sort,
+            )
+            send_location_prompt(sender, session, saved=True)
+            return
+
+        if not parsed_preferences:
+            conversation_store.update(
+                sender,
+                state=ConversationState.WAITING_FUEL,
+                language=language,
+            )
+            send_fuel_prompt(sender, language)
+            return
+
         session = conversation_store.update(
             sender,
             state=ConversationState.WAITING_LOCATION,
+            language=language,
             **parsed_preferences,
         )
 

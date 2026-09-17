@@ -61,6 +61,8 @@ WhatsApp response
 - Handle Google Places errors and timeouts
 - Receive WhatsApp webhook events
 - Detect text and location messages
+- Interpret natural-language searches in English and Spanish
+- Keep language interpretation separate from deterministic station lookup
 - Send automatic WhatsApp replies
 - Deployed on Railway with a stable public URL
 - Automated testing with pytest
@@ -89,6 +91,15 @@ gas-finder-whatsapp-bot/
 │   ├── config.py
 │   ├── main.py
 │   ├── schemas.py
+│   ├── conversation/
+│   ├── handlers/
+│   ├── intelligence/
+│   │   ├── interpreter.py
+│   │   └── models.py
+│   ├── models/
+│   ├── parsers/
+│   ├── routers/
+│   ├── routing/
 │   ├── services/
 │   │   ├── google_places.py
 │   │   └── whatsapp.py

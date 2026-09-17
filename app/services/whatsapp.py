@@ -1,4 +1,5 @@
 import httpx
+from app.intelligence import RuleBasedIntentInterpreter
 from app.i18n import t
 from app.models import IncomingMessage
 
@@ -270,27 +271,5 @@ def parse_search_preferences(text: str) -> dict:
         -> {"fuel_type": "premium", "sort": "distance"}
     """
 
-    preferences = {}
-
-    if not text:
-        return preferences
-
-    words = text.lower().strip().split()
-
-    # Fuel type
-    if "regular" in words:
-        preferences["fuel_type"] = "regular"
-    elif "premium" in words:
-        preferences["fuel_type"] = "premium"
-    elif "diesel" in words:
-        preferences["fuel_type"] = "diesel"
-
-    # Sort option
-    if "closest" in words:
-        preferences["sort"] = "distance"
-    elif "cheapest" in words:
-        preferences["sort"] = "price"
-    elif "best" in words:
-        preferences["sort"] = "best"
-
-    return preferences
+    interpretation = RuleBasedIntentInterpreter().interpret(text)
+    return interpretation.search_preferences
