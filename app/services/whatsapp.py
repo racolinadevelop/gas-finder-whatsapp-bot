@@ -14,7 +14,78 @@ class WhatsAppServiceError(Exception):
     pass
 
 
+LOCATION_REQUEST_MARKERS = (
+    "share your location",
+    "waiting for your location",
+    "comparte tu ubicación",
+    "esperando tu ubicación",
+)
+
+
+def _is_location_request_prompt(message: str) -> bool:
+    normalized = message.casefold()
+    return any(marker in normalized for marker in LOCATION_REQUEST_MARKERS)
+
+
+def send_location_request_message(to: str, message: str) -> dict:
+    if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
+        raise WhatsAppServiceError("WhatsApp configuration is missing.")
+
+    url = (
+        f"https://graph.facebook.com/"
+        f"{WHATSAPP_API_VERSION}/"
+        f"{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "location_request_message",
+            "body": {
+                "text": message,
+            },
+            "action": {
+                "name": "send_location",
+            },
+        },
+    }
+
+    try:
+        response = httpx.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=10.0,
+        )
+
+        response.raise_for_status()
+
+    except httpx.TimeoutException as exc:
+        raise WhatsAppServiceError("WhatsApp API took too long to respond.") from exc
+
+    except httpx.HTTPStatusError as exc:
+        raise WhatsAppServiceError(
+            f"WhatsApp API returned HTTP {exc.response.status_code}."
+        ) from exc
+
+    except httpx.RequestError as exc:
+        raise WhatsAppServiceError("Unable to connect to WhatsApp API.") from exc
+
+    return response.json()
+
+
 def send_text_message(to: str, message: str) -> dict:
+    if _is_location_request_prompt(message):
+        return send_location_request_message(to=to, message=message)
+
     if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
         raise WhatsAppServiceError("WhatsApp configuration is missing.")
 
