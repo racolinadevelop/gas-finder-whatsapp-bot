@@ -1,3 +1,7 @@
+from app.conversation.distance import (
+    is_distance_in_range,
+    parse_distance_input,
+)
 from app.conversation.navigation import (
     NavigationAction,
     get_previous_state,
@@ -20,5 +24,7 @@ __all__ = [
     "SearchFlowPrompt",
     "decide_search_flow",
     "get_previous_state",
+    "is_distance_in_range",
+    "parse_distance_input",
     "parse_navigation_action",
 ]

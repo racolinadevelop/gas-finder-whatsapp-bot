@@ -1,5 +1,3 @@
-import re
-
 from app.constants import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.conversation import (
     ConversationSession,
@@ -10,6 +8,8 @@ from app.conversation import (
     SearchFlowPrompt,
     decide_search_flow,
     get_previous_state,
+    is_distance_in_range,
+    parse_distance_input,
     parse_navigation_action,
 )
 from app.conversation.options import (
@@ -135,28 +135,6 @@ def send_custom_distance_prompt(
             range_error=range_error,
         ),
     )
-
-
-def parse_distance_input(text: str) -> float | None:
-    match = re.search(
-        r"(\d+(?:[.,]\d+)?)\s*"
-        r"(miles?|millas?|mi|kilometers?|kilómetros?|kilometros?|km)\b",
-        text.casefold(),
-    )
-
-    if match is None:
-        match = re.fullmatch(r"\s*(\d+(?:[.,]\d+)?)\s*", text)
-
-    if match is None:
-        return None
-
-    distance = float(match.group(1).replace(",", "."))
-    unit = match.group(2) if match.lastindex == 2 else "miles"
-
-    if unit == "km" or unit.startswith("kilomet"):
-        return round(distance / 1.609344, 3)
-
-    return distance
 
 
 def handle_distance_selection(sender: str, distance: float) -> None:
@@ -460,7 +438,7 @@ def handle_distance_text(
             )
         return
 
-    if not MIN_DISTANCE_MILES <= distance <= MAX_DISTANCE_MILES:
+    if not is_distance_in_range(distance):
         send_custom_distance_prompt(
             incoming_message.sender,
             session.language,
