@@ -22,6 +22,32 @@ AI_INTENT_ENABLED = os.getenv("AI_INTENT_ENABLED", "false").lower() in {
     "yes",
 }
 
+REDIS_URL = os.getenv("REDIS_URL")
+REDIS_KEY_PREFIX = os.getenv("REDIS_KEY_PREFIX", "gas-finder")
+
+
+def positive_int_setting(name: str, default: int) -> int:
+    raw_value = os.getenv(name, str(default))
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a positive integer") from exc
+
+    if value <= 0:
+        raise RuntimeError(f"{name} must be a positive integer")
+
+    return value
+
+
+CONVERSATION_TTL_SECONDS = positive_int_setting(
+    "CONVERSATION_TTL_SECONDS",
+    7 * 24 * 60 * 60,
+)
+WHATSAPP_DEDUP_TTL_SECONDS = positive_int_setting(
+    "WHATSAPP_DEDUP_TTL_SECONDS",
+    24 * 60 * 60,
+)
+
 if GAS_STATION_PROVIDER not in {"google", "here"}:
     raise RuntimeError("GAS_STATION_PROVIDER must be 'google' or 'here'")
 

@@ -1,3 +1,9 @@
-from .deduplication import InMemoryMessageDeduplicator
+from .deduplication import (
+    InMemoryMessageDeduplicator,
+    RedisMessageDeduplicator,
+)
 
-__all__ = ["InMemoryMessageDeduplicator"]
+__all__ = [
+    "InMemoryMessageDeduplicator",
+    "RedisMessageDeduplicator",
+]

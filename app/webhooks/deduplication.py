@@ -1,6 +1,9 @@
 import time
 from collections.abc import Callable
+from hashlib import sha256
 from threading import RLock
+
+from app.persistence import RedisClient
 
 
 class InMemoryMessageDeduplicator:
@@ -68,3 +71,58 @@ class InMemoryMessageDeduplicator:
         ]
         for message_id in expired_message_ids:
             self._expires_at.pop(message_id)
+
+
+class RedisMessageDeduplicator:
+    """Atomic webhook deduplication shared by every application instance."""
+
+    def __init__(
+        self,
+        client: RedisClient,
+        *,
+        ttl_seconds: int = 24 * 60 * 60,
+        key_prefix: str = "gas-finder",
+    ) -> None:
+        if ttl_seconds <= 0:
+            raise ValueError("ttl_seconds must be greater than zero")
+
+        self._client = client
+        self._ttl_seconds = ttl_seconds
+        self._key_prefix = key_prefix.rstrip(":")
+
+    def claim(self, message_id: str | None) -> bool:
+        if not message_id:
+            return True
+
+        claimed = self._client.set(
+            self._key(message_id),
+            "1",
+            ex=self._ttl_seconds,
+            nx=True,
+        )
+        return bool(claimed)
+
+    def release(self, message_id: str | None) -> None:
+        if message_id:
+            self._client.delete(self._key(message_id))
+
+    def clear(self) -> None:
+        keys = list(
+            self._client.scan_iter(
+                match=f"{self._key_prefix}:whatsapp-message:*",
+            )
+        )
+        if keys:
+            self._client.delete(*keys)
+
+    def __len__(self) -> int:
+        return sum(
+            1
+            for _ in self._client.scan_iter(
+                match=f"{self._key_prefix}:whatsapp-message:*",
+            )
+        )
+
+    def _key(self, message_id: str) -> str:
+        message_hash = sha256(message_id.encode("utf-8")).hexdigest()
+        return f"{self._key_prefix}:whatsapp-message:{message_hash}"

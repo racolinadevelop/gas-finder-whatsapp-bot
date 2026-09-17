@@ -3,7 +3,6 @@ from app.conversation import (
     ConversationSession,
     ConversationState,
     ConversationTransitions,
-    InMemoryConversationStore,
     NavigationAction,
     SearchFlowDecision,
     SearchFlowPrompt,
@@ -38,7 +37,7 @@ from app.services.whatsapp import (
     send_text_message,
 )
 from app.subscriptions import SubscriptionService
-from app.webhooks import InMemoryMessageDeduplicator
+from app.runtime import build_runtime_state
 
 GREETINGS = {
     "hi",
@@ -50,12 +49,13 @@ GREETINGS = {
     "good evening",
 }
 
-conversation_store = InMemoryConversationStore()
+runtime_state = build_runtime_state()
+conversation_store = runtime_state.conversation_store
 intent_interpreter = build_intent_interpreter()
 subscription_service = SubscriptionService()
 location_search_service = LocationSearchService()
 conversation_transitions = ConversationTransitions(conversation_store)
-message_deduplicator = InMemoryMessageDeduplicator()
+message_deduplicator = runtime_state.message_deduplicator
 
 
 def send_prompt(sender: str, prompt: Prompt) -> None:

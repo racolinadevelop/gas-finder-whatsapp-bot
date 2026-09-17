@@ -181,6 +181,12 @@ WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_BUSINESS_ACCOUNT_ID=
 WHATSAPP_API_VERSION=
 WHATSAPP_VERIFY_TOKEN=
+
+# Optional locally; required in production for persistent runtime state.
+REDIS_URL=
+REDIS_KEY_PREFIX=gas-finder
+CONVERSATION_TTL_SECONDS=604800
+WHATSAPP_DEDUP_TTL_SECONDS=86400
 ```
 
 Never commit `.env`.
@@ -404,6 +410,14 @@ railway.toml
 
 Production credentials are stored using Railway environment variables.
 
+For shared conversation state and webhook deduplication, add a Redis service
+to the Railway project and expose its connection URL to the application as
+`REDIS_URL`. When configured, conversations remain available for seven days
+and processed WhatsApp message IDs for 24 hours by default. Both durations can
+be changed with the environment variables shown above. The application checks
+the Redis connection during startup so an invalid configuration fails before
+it begins accepting webhooks.
+
 Cloudflare Quick Tunnel was used during early development but is no longer required for production.
 
 ## Current Production Status
@@ -423,6 +437,8 @@ Automatic WhatsApp replies ✅
 System User Access Token ✅
 Railway deployment ✅
 Stable production URL ✅
+Redis-ready persistent conversation state ✅
+Redis-ready cross-instance webhook deduplication ✅
 ```
 
 ## Current Limitations

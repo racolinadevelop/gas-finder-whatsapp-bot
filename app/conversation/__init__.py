@@ -13,7 +13,10 @@ from app.conversation.search_flow import (
     SearchFlowPrompt,
     decide_search_flow,
 )
-from app.conversation.store import InMemoryConversationStore
+from app.conversation.store import (
+    InMemoryConversationStore,
+    RedisConversationStore,
+)
 from app.conversation.transitions import ConversationTransitions
 
 __all__ = [
@@ -21,6 +24,7 @@ __all__ = [
     "ConversationState",
     "ConversationTransitions",
     "InMemoryConversationStore",
+    "RedisConversationStore",
     "NavigationAction",
     "SearchFlowDecision",
     "SearchFlowPrompt",
