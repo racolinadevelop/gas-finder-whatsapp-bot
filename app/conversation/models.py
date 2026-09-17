@@ -7,6 +7,8 @@ class ConversationState(StrEnum):
     WAITING_LANGUAGE = "waiting_language"
     WAITING_FUEL = "waiting_fuel"
     WAITING_SORT = "waiting_sort"
+    WAITING_DISTANCE = "waiting_distance"
+    WAITING_CUSTOM_DISTANCE = "waiting_custom_distance"
     WAITING_LOCATION = "waiting_location"
 
 
@@ -17,3 +19,4 @@ class ConversationSession:
     language: str = "en"
     fuel_type: str = "regular"
     sort: str = "best"
+    max_distance_miles: float | None = None

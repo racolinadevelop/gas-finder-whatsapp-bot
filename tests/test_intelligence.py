@@ -53,6 +53,33 @@ def test_balanced_request_uses_best_sort(interpreter):
     assert result.sort == "best"
 
 
+def test_interprets_maximum_distance_in_miles(interpreter):
+    result = interpreter.interpret("Find regular gas within 3 miles")
+
+    assert result.intent == IntentType.SEARCH_GAS
+    assert result.fuel_type == "regular"
+    assert result.max_distance_miles == 3
+    assert result.search_preferences == {
+        "fuel_type": "regular",
+        "max_distance_miles": 3,
+    }
+
+
+def test_interprets_spanish_decimal_distance(interpreter):
+    result = interpreter.interpret("Búscame diésel a menos de 2,5 millas")
+
+    assert result.language == "es"
+    assert result.fuel_type == "diesel"
+    assert result.max_distance_miles == 2.5
+
+
+def test_converts_kilometers_to_miles_without_ai(interpreter):
+    result = interpreter.interpret("Gasolina premium dentro de 5 km")
+
+    assert result.language == "es"
+    assert result.max_distance_miles == 3.107
+
+
 def test_unknown_message_is_not_treated_as_search(interpreter):
     result = interpreter.interpret("How are you today?")
 
@@ -158,7 +185,7 @@ def test_sort_text_advances_expected_sort_step(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_text_message",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -167,10 +194,10 @@ def test_sort_text_advances_expected_sort_step(monkeypatch):
     )
 
     session = whatsapp_handler.conversation_store.get(sender)
-    assert session.state == ConversationState.WAITING_LOCATION
+    assert session.state == ConversationState.WAITING_DISTANCE
     assert session.fuel_type == "premium"
     assert session.sort == "price"
-    assert "Más barato" in sent_messages[0]["message"]
+    assert sent_messages[0]["button_text"] == "Elegir distancia"
 
     whatsapp_handler.conversation_store.clear()
 
@@ -220,6 +247,7 @@ def test_openai_interpreter_uses_structured_outputs_without_storage():
                     "intent": "search_gas",
                     "fuel_type": "premium",
                     "sort": "best",
+                    "max_distance_miles": 4.5,
                     "language": "es",
                     "confidence": 0.91,
                 }
@@ -240,6 +268,7 @@ def test_openai_interpreter_uses_structured_outputs_without_storage():
         intent=IntentType.SEARCH_GAS,
         fuel_type="premium",
         sort="best",
+        max_distance_miles=4.5,
         language="es",
         confidence=0.91,
         source="openai",
@@ -274,6 +303,7 @@ def test_openai_interpreter_rejects_invalid_structured_result():
                     "intent": "search_gas",
                     "fuel_type": "jet_fuel",
                     "sort": "price",
+                    "max_distance_miles": None,
                     "language": "en",
                     "confidence": 0.9,
                 }

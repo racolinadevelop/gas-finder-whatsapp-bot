@@ -24,6 +24,12 @@ def test_parse_navigation_action_ignores_regular_text():
 
 def test_get_previous_state_moves_back_one_step():
     assert get_previous_state(ConversationState.WAITING_LOCATION) == (
+        ConversationState.WAITING_DISTANCE
+    )
+    assert get_previous_state(ConversationState.WAITING_CUSTOM_DISTANCE) == (
+        ConversationState.WAITING_DISTANCE
+    )
+    assert get_previous_state(ConversationState.WAITING_DISTANCE) == (
         ConversationState.WAITING_SORT
     )
     assert get_previous_state(ConversationState.WAITING_SORT) == (

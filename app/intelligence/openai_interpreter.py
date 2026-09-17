@@ -33,6 +33,12 @@ INTENT_SCHEMA = {
                 {"type": "null"},
             ]
         },
+        "max_distance_miles": {
+            "anyOf": [
+                {"type": "number"},
+                {"type": "null"},
+            ]
+        },
         "language": {
             "anyOf": [
                 {"type": "string", "enum": ["en", "es"]},
@@ -49,6 +55,7 @@ INTENT_SCHEMA = {
         "intent",
         "fuel_type",
         "sort",
+        "max_distance_miles",
         "language",
         "confidence",
     ],
@@ -60,7 +67,9 @@ Return search_gas only when the user is asking to find or compare fuel or gas
 stations. Extract only information explicitly stated or clearly implied.
 Use distance for closest, price for cheapest, and best when the user wants a
 balance between price and distance. Use null for missing values. Detect English
-or Spanish. For unrelated or unclear input, return unknown with null values.
+or Spanish. Extract an explicitly requested maximum distance in miles. Convert
+kilometers to miles when necessary. For unrelated or unclear input, return
+unknown with null values.
 Never invent a station, location, price, preference, or user detail."""
 
 
@@ -161,6 +170,7 @@ class OpenAIIntentInterpreter:
 
         fuel_type = data.get("fuel_type")
         sort = data.get("sort")
+        max_distance_miles = data.get("max_distance_miles")
         language = data.get("language")
 
         if fuel_type not in {None, "regular", "premium", "diesel"}:
@@ -169,6 +179,13 @@ class OpenAIIntentInterpreter:
             raise AIInterpretationError("OpenAI returned an invalid sort option.")
         if language not in {None, "en", "es"}:
             raise AIInterpretationError("OpenAI returned an invalid language.")
+        if max_distance_miles is not None:
+            try:
+                max_distance_miles = float(max_distance_miles)
+            except (TypeError, ValueError) as exc:
+                raise AIInterpretationError(
+                    "OpenAI returned an invalid maximum distance."
+                ) from exc
         if not 0 <= confidence <= 1:
             raise AIInterpretationError("OpenAI returned invalid confidence.")
 
@@ -176,6 +193,7 @@ class OpenAIIntentInterpreter:
             intent=intent,
             fuel_type=fuel_type,
             sort=sort,
+            max_distance_miles=max_distance_miles,
             language=language,
             confidence=confidence,
             source="openai",

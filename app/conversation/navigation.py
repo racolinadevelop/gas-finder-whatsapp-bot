@@ -38,7 +38,11 @@ NAVIGATION_BUTTONS = {
 PREVIOUS_STATES = {
     ConversationState.WAITING_FUEL: ConversationState.WAITING_LANGUAGE,
     ConversationState.WAITING_SORT: ConversationState.WAITING_FUEL,
-    ConversationState.WAITING_LOCATION: ConversationState.WAITING_SORT,
+    ConversationState.WAITING_DISTANCE: ConversationState.WAITING_SORT,
+    ConversationState.WAITING_CUSTOM_DISTANCE: (
+        ConversationState.WAITING_DISTANCE
+    ),
+    ConversationState.WAITING_LOCATION: ConversationState.WAITING_DISTANCE,
 }
 
 

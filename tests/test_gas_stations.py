@@ -12,6 +12,7 @@ from app.services.whatsapp import (
     build_text_reply,
     build_gas_stations_reply,
     parse_search_preferences,
+    send_list_message,
     send_reply_buttons,
     WhatsAppServiceError,
 )
@@ -412,6 +413,46 @@ def test_build_gas_stations_reply_without_results():
     assert "Category: Best option" in reply
 
 
+def test_no_results_reply_includes_maximum_distance():
+    reply = build_gas_stations_reply(
+        {"stations": []},
+        max_distance_miles=3,
+    )
+
+    assert "Maximum distance: 3 mi" in reply
+
+
+def test_best_reply_explains_lower_total_cost_in_spanish():
+    stations = [
+        {
+            "name": "Cercana",
+            "distance_miles": 1.0,
+            "selected_fuel": {"available": True, "price": 2.95},
+        },
+        {
+            "name": "Barata pero lejana",
+            "distance_miles": 8.0,
+            "selected_fuel": {"available": True, "price": 2.90},
+        },
+    ]
+    for station in stations:
+        station["estimated_cost"] = calculate_estimated_cost(
+            price_per_gallon=station["selected_fuel"]["price"],
+            distance_miles=station["distance_miles"],
+            gallons_needed=10,
+            vehicle_mpg=25,
+        )
+
+    reply = build_gas_stations_reply(
+        {"stations": stations},
+        language="es",
+        sort="best",
+    )
+
+    assert "Barata pero lejana tiene un precio menor" in reply
+    assert "costo estimado menor" in reply
+
+
 def test_build_gas_stations_reply_with_unavailable_price():
     result = {
         "stations": [
@@ -476,6 +517,16 @@ def test_parse_search_preferences_empty_text():
     result = parse_search_preferences("")
 
     assert result == {}
+
+
+def test_parse_search_preferences_includes_maximum_distance():
+    result = parse_search_preferences("premium best within 4 miles")
+
+    assert result == {
+        "fuel_type": "premium",
+        "sort": "best",
+        "max_distance_miles": 4,
+    }
 
 
 def test_send_reply_buttons(monkeypatch):
@@ -573,6 +624,50 @@ def test_send_reply_buttons_rejects_more_than_three_buttons(
 
     except WhatsAppServiceError:
         assert True
+
+
+def test_send_list_message_builds_interactive_list(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"messages": [{"id": "wamid.list"}]}
+
+    def fake_post(url, headers, json, timeout):
+        captured["json"] = json
+        return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_ACCESS_TOKEN",
+        "test-token",
+    )
+    monkeypatch.setattr(
+        "app.services.whatsapp.WHATSAPP_PHONE_NUMBER_ID",
+        "123456789",
+    )
+    monkeypatch.setattr("app.services.whatsapp.httpx.post", fake_post)
+
+    result = send_list_message(
+        to="15551234567",
+        body_text="Choose a distance",
+        button_text="Distances",
+        section_title="Search radius",
+        rows=[
+            {"id": "distance_1", "title": "1 mi"},
+            {"id": "distance_custom", "title": "Custom"},
+        ],
+    )
+
+    interactive = captured["json"]["interactive"]
+    assert result == {"messages": [{"id": "wamid.list"}]}
+    assert interactive["type"] == "list"
+    assert interactive["action"]["button"] == "Distances"
+    assert interactive["action"]["sections"][0]["rows"][1]["id"] == (
+        "distance_custom"
+    )
 
 
 def test_parse_incoming_interactive_button_reply():
@@ -819,6 +914,7 @@ def test_whatsapp_button_flow(monkeypatch):
     client = TestClient(app)
 
     sent_button_messages = []
+    sent_list_messages = []
     sent_text_messages = []
 
     def fake_send_reply_buttons(to, body_text, buttons):
@@ -840,6 +936,10 @@ def test_whatsapp_button_flow(monkeypatch):
         )
         return {"messages": [{"id": "wamid.text"}]}
 
+    def fake_send_list_message(**kwargs):
+        sent_list_messages.append(kwargs)
+        return {"messages": [{"id": "wamid.list"}]}
+
     monkeypatch.setattr(
         whatsapp_handler,
         "send_reply_buttons",
@@ -850,6 +950,11 @@ def test_whatsapp_button_flow(monkeypatch):
         whatsapp_handler,
         "send_text_message",
         fake_send_text_message,
+    )
+    monkeypatch.setattr(
+        whatsapp_handler,
+        "send_list_message",
+        fake_send_list_message,
     )
 
     whatsapp_handler.conversation_store.clear()
@@ -975,14 +1080,64 @@ def test_whatsapp_button_flow(monkeypatch):
 
     assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
         sender=sender,
-        state=ConversationState.WAITING_LOCATION,
+        state=ConversationState.WAITING_DISTANCE,
         language="en",
         fuel_type="diesel",
         sort="price",
     )
 
+    assert [row["id"] for row in sent_list_messages[0]["rows"]] == [
+        "distance_1",
+        "distance_3",
+        "distance_5",
+        "distance_10",
+        "distance_custom",
+    ]
+
+    distance_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.distance",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "list_reply",
+                                        "list_reply": {
+                                            "id": "distance_5",
+                                            "title": "5 mi",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=distance_payload,
+    )
+
+    assert response.status_code == 200
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_LOCATION,
+        language="en",
+        fuel_type="diesel",
+        sort="price",
+        max_distance_miles=5,
+    )
     assert "Diesel" in sent_text_messages[0]["message"]
     assert "Cheapest" in sent_text_messages[0]["message"]
+    assert "Maximum distance: 5 mi" in sent_text_messages[0]["message"]
 
     whatsapp_handler.conversation_store.clear()
 
@@ -1025,6 +1180,7 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
     client = TestClient(app)
 
     sent_button_messages = []
+    sent_list_messages = []
     sent_text_messages = []
 
     def fake_send_reply_buttons(to, body_text, buttons):
@@ -1046,6 +1202,10 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         )
         return {"messages": [{"id": "wamid.text"}]}
 
+    def fake_send_list_message(**kwargs):
+        sent_list_messages.append(kwargs)
+        return {"messages": [{"id": "wamid.list"}]}
+
     monkeypatch.setattr(
         whatsapp_handler,
         "send_reply_buttons",
@@ -1056,6 +1216,11 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         whatsapp_handler,
         "send_text_message",
         fake_send_text_message,
+    )
+    monkeypatch.setattr(
+        whatsapp_handler,
+        "send_list_message",
+        fake_send_list_message,
     )
 
     whatsapp_handler.conversation_store.clear()
@@ -1195,15 +1360,59 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
 
     assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
         sender=sender,
-        state=ConversationState.WAITING_LOCATION,
+        state=ConversationState.WAITING_DISTANCE,
         language="es",
         fuel_type="diesel",
         sort="price",
     )
 
+    assert sent_list_messages[0]["button_text"] == "Elegir distancia"
+
+    distance_payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": "wamid.distance",
+                                    "type": "interactive",
+                                    "interactive": {
+                                        "type": "list_reply",
+                                        "list_reply": {
+                                            "id": "distance_3",
+                                            "title": "3 mi",
+                                        },
+                                    },
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+
+    response = client.post(
+        "/api/v1/whatsapp/webhook",
+        json=distance_payload,
+    )
+
+    assert response.status_code == 200
+    assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
+        sender=sender,
+        state=ConversationState.WAITING_LOCATION,
+        language="es",
+        fuel_type="diesel",
+        sort="price",
+        max_distance_miles=3,
+    )
     assert "Diésel" in sent_text_messages[0]["message"]
     assert "Más barato" in sent_text_messages[0]["message"]
     assert "Ahora comparte tu ubicación" in (sent_text_messages[0]["message"])
+    assert "Distancia máxima: 3 mi" in sent_text_messages[0]["message"]
 
     whatsapp_handler.conversation_store.clear()
 

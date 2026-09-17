@@ -153,6 +153,73 @@ def send_reply_buttons(
     return response.json()
 
 
+def send_list_message(
+    to: str,
+    body_text: str,
+    button_text: str,
+    section_title: str,
+    rows: list[dict],
+) -> dict:
+    """Send one WhatsApp interactive list containing up to ten rows."""
+
+    if not WHATSAPP_ACCESS_TOKEN:
+        raise WhatsAppServiceError("WHATSAPP_ACCESS_TOKEN is not configured")
+    if not WHATSAPP_PHONE_NUMBER_ID:
+        raise WhatsAppServiceError("WHATSAPP_PHONE_NUMBER_ID is not configured")
+    if not rows or len(rows) > 10:
+        raise WhatsAppServiceError(
+            "WhatsApp list messages require between 1 and 10 rows"
+        )
+
+    url = (
+        f"https://graph.facebook.com/"
+        f"{WHATSAPP_API_VERSION}/"
+        f"{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    )
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "body": {"text": body_text},
+            "action": {
+                "button": button_text,
+                "sections": [
+                    {
+                        "title": section_title,
+                        "rows": rows,
+                    }
+                ],
+            },
+        },
+    }
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = httpx.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=15.0,
+        )
+        response.raise_for_status()
+    except httpx.TimeoutException as exc:
+        raise WhatsAppServiceError("WhatsApp API request timed out") from exc
+    except httpx.HTTPStatusError as exc:
+        raise WhatsAppServiceError(
+            f"WhatsApp API returned HTTP {exc.response.status_code}"
+        ) from exc
+    except httpx.RequestError as exc:
+        raise WhatsAppServiceError("Could not connect to WhatsApp API") from exc
+
+    return response.json()
+
+
 def build_text_reply(incoming_message: IncomingMessage) -> str | None:
     if incoming_message.message_type != "text":
         return None
@@ -165,6 +232,7 @@ def build_gas_stations_reply(
     language: str = "en",
     fuel_type: str = "regular",
     sort: str = "best",
+    max_distance_miles: float | None = None,
 ) -> str:
     stations = result.get("stations", [])
 
@@ -172,10 +240,17 @@ def build_gas_stations_reply(
     sort_name = t(language, f"sort_{sort}")
 
     if not stations:
-        return (
-            f"{t(language, 'no_results', fuel=fuel_name, sort=sort_name)}\n\n"
-            f"{t(language, 'navigation_hint')}"
-        )
+        lines = [t(language, "no_results", fuel=fuel_name, sort=sort_name)]
+        if max_distance_miles is not None:
+            lines.append(
+                t(
+                    language,
+                    "search_max_distance",
+                    distance=max_distance_miles,
+                )
+            )
+        lines.append(t(language, "navigation_hint"))
+        return "\n\n".join(lines)
 
     displayed_count = min(len(stations), 5)
 
@@ -194,6 +269,15 @@ def build_gas_stations_reply(
             count=displayed_count,
         ),
     ]
+
+    if max_distance_miles is not None:
+        lines.append(
+            t(
+                language,
+                "search_max_distance",
+                distance=max_distance_miles,
+            )
+        )
 
     rank_labels = {
         1: "1️⃣",
@@ -221,6 +305,10 @@ def build_gas_stations_reply(
 
         if index == 1:
             station_lines.append(t(language, f"top_result_{sort}"))
+            if sort == "best":
+                station_lines.append(
+                    build_best_recommendation_explanation(stations, language)
+                )
 
         station_lines.extend(
             [
@@ -257,6 +345,56 @@ def build_gas_stations_reply(
     )
 
     return "\n\n".join(lines)
+
+
+def build_best_recommendation_explanation(
+    stations: list[dict],
+    language: str,
+) -> str:
+    winner = stations[0]
+    comparable = [
+        station
+        for station in stations
+        if station.get("selected_fuel", {}).get("price") is not None
+        and station.get("estimated_cost") is not None
+    ]
+
+    if winner not in comparable:
+        return t(language, "best_reason_general")
+
+    cheapest = min(
+        comparable,
+        key=lambda station: station["selected_fuel"]["price"],
+    )
+    closest = min(
+        comparable,
+        key=lambda station: station["distance_miles"],
+    )
+
+    if winner is cheapest and winner is closest:
+        return t(language, "best_reason_both")
+
+    if winner is not cheapest:
+        winner_total = winner["estimated_cost"]["estimated_total_cost"]
+        alternative_total = cheapest["estimated_cost"][
+            "estimated_total_cost"
+        ]
+
+        if winner_total >= alternative_total:
+            return t(language, "best_reason_general")
+
+        return t(
+            language,
+            "best_reason_lower_total",
+            alternative=cheapest.get("name", "Another station"),
+            winner_total=winner_total,
+            alternative_total=alternative_total,
+        )
+
+    if winner is not closest:
+        return t(language, "best_reason_price")
+
+    return t(language, "best_reason_general")
 
 
 def parse_search_preferences(text: str) -> dict:

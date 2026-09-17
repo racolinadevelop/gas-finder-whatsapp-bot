@@ -62,6 +62,9 @@ WhatsApp response
 - Receive WhatsApp webhook events
 - Detect text and location messages
 - Interpret natural-language searches in English and Spanish
+- Understand a requested maximum distance in miles or kilometers
+- Offer a guided WhatsApp distance list with 1, 3, 5, 10 miles or a custom value
+- Explain why the top "Best option" balances price and travel distance
 - Keep language interpretation separate from deterministic station lookup
 - Optionally use an OpenAI Structured Outputs fallback for ambiguous messages
 - Send automatic WhatsApp replies

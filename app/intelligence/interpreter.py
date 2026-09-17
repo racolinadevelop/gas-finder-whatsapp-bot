@@ -131,14 +131,23 @@ class RuleBasedIntentInterpreter:
 
         fuel_type = self._match_alias(normalized, self._fuel_aliases)
         sort = self._match_sort(normalized)
+        max_distance_miles = self._match_max_distance(normalized)
         words = set(normalized.split())
         search_requested = bool(words & self._search_terms)
 
-        if fuel_type is None and sort is None and not search_requested:
+        if (
+            fuel_type is None
+            and sort is None
+            and max_distance_miles is None
+            and not search_requested
+        ):
             return MessageInterpretation(intent=IntentType.UNKNOWN)
 
-        entity_count = sum(value is not None for value in (fuel_type, sort))
-        confidence = 0.95 if entity_count == 2 else 0.8
+        entity_count = sum(
+            value is not None
+            for value in (fuel_type, sort, max_distance_miles)
+        )
+        confidence = 0.95 if entity_count >= 2 else 0.8
 
         if entity_count == 0:
             confidence = 0.65
@@ -151,6 +160,7 @@ class RuleBasedIntentInterpreter:
             intent=IntentType.SEARCH_GAS,
             fuel_type=fuel_type,
             sort=sort,
+            max_distance_miles=max_distance_miles,
             language=language,
             confidence=confidence,
         )
@@ -172,6 +182,25 @@ class RuleBasedIntentInterpreter:
             return "best"
 
         return self._match_alias(text, self._sort_aliases)
+
+    @staticmethod
+    def _match_max_distance(text: str) -> float | None:
+        match = re.search(
+            r"(?:^|\s)(\d+(?:[.,]\d+)?)\s*"
+            r"(miles?|millas?|mi|kilometers?|kilometros?|km)(?:$|\s)",
+            text,
+        )
+
+        if match is None:
+            return None
+
+        distance = float(match.group(1).replace(",", "."))
+        unit = match.group(2)
+
+        if unit in {"kilometer", "kilometers", "kilometro", "kilometros", "km"}:
+            return round(distance / 1.609344, 3)
+
+        return distance
 
     def _match_alias(
         self,
@@ -199,4 +228,11 @@ class RuleBasedIntentInterpreter:
             if not unicodedata.combining(character)
         )
         lowercase = without_accents.casefold()
-        return " ".join(re.findall(r"[a-z0-9]+", lowercase))
+        normalized_decimals = re.sub(
+            r"(?<=\d)[,.](?=\d)",
+            ".",
+            lowercase,
+        )
+        return " ".join(
+            re.findall(r"[a-z0-9]+(?:\.[0-9]+)?", normalized_decimals)
+        )

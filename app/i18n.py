@@ -69,6 +69,26 @@ TRANSLATIONS = {
         "button_sort_price": "💵 Cheapest",
         "button_sort_best": "⭐ Best option",
 
+        "choose_distance": (
+            "📏 How far should I search? Choose a maximum distance."
+        ),
+        "invalid_distance_option": (
+            "That option doesn't match this step. Choose a distance from "
+            "the list or type a value such as “7 miles”."
+        ),
+        "distance_list_button": "Choose distance",
+        "distance_section_title": "Search radius",
+        "distance_custom_title": "Custom distance",
+        "distance_custom_description": "Type any value from 0.1 to 31 mi",
+        "custom_distance_prompt": (
+            "✍️ Type your maximum distance between {minimum:g} and "
+            "{maximum:g} miles. For example: “7 miles” or “10 km”."
+        ),
+        "invalid_custom_distance": (
+            "I couldn't recognize that distance. Type a number such as "
+            "“7”, “7 miles”, or “10 km”."
+        ),
+
         "preferences_saved": (
             "Great! ✅ Your search is ready.\n\n"
             "⛽ Fuel type: {fuel}\n"
@@ -106,6 +126,29 @@ TRANSLATIONS = {
         ),
         "results_count": (
             "📊 Results shown: {count}"
+        ),
+        "max_distance_saved": "📏 Maximum distance: {distance:g} mi",
+        "invalid_max_distance": (
+            "📏 The maximum distance must be between {minimum:g} and "
+            "{maximum:g} miles. Please try again."
+        ),
+        "search_max_distance": "📏 Maximum distance: {distance:g} mi",
+        "best_reason_both": (
+            "💡 Why: It combines the lowest available price with the "
+            "shortest trip."
+        ),
+        "best_reason_lower_total": (
+            "💡 Why: {alternative} has a lower pump price, but this option's "
+            "estimated purchase + round-trip cost is lower "
+            "(${winner_total:.2f} vs ${alternative_total:.2f})."
+        ),
+        "best_reason_price": (
+            "💡 Why: It is not the closest station, but its lower price gives "
+            "it the lowest estimated purchase + round-trip cost."
+        ),
+        "best_reason_general": (
+            "💡 Why: It offers the best available balance of price and "
+            "distance."
         ),
     },
 
@@ -178,6 +221,27 @@ TRANSLATIONS = {
         "button_sort_price": "💵 Más barato",
         "button_sort_best": "⭐ Mejor opción",
 
+        "choose_distance": (
+            "📏 ¿Hasta qué distancia debo buscar? Selecciona una distancia "
+            "máxima."
+        ),
+        "invalid_distance_option": (
+            "Esa opción no corresponde a este paso. Selecciona una distancia "
+            "de la lista o escribe un valor como “7 millas”."
+        ),
+        "distance_list_button": "Elegir distancia",
+        "distance_section_title": "Radio de búsqueda",
+        "distance_custom_title": "Otra distancia",
+        "distance_custom_description": "Escribe un valor de 0.1 a 31 mi",
+        "custom_distance_prompt": (
+            "✍️ Escribe tu distancia máxima entre {minimum:g} y "
+            "{maximum:g} millas. Por ejemplo: “7 millas” o “10 km”."
+        ),
+        "invalid_custom_distance": (
+            "No pude reconocer esa distancia. Escribe un número como “7”, "
+            "“7 millas” o “10 km”."
+        ),
+
         "preferences_saved": (
             "¡Perfecto! ✅ Tu búsqueda está lista.\n\n"
             "⛽ Combustible: {fuel}\n"
@@ -215,6 +279,31 @@ TRANSLATIONS = {
         ),
         "results_count": (
             "📊 Resultados mostrados: {count}"
+        ),
+        "max_distance_saved": "📏 Distancia máxima: {distance:g} mi",
+        "invalid_max_distance": (
+            "📏 La distancia máxima debe estar entre {minimum:g} y "
+            "{maximum:g} millas. Inténtalo nuevamente."
+        ),
+        "search_max_distance": "📏 Distancia máxima: {distance:g} mi",
+        "best_reason_both": (
+            "💡 Por qué: Combina el precio disponible más bajo con el "
+            "recorrido más corto."
+        ),
+        "best_reason_lower_total": (
+            "💡 Por qué: {alternative} tiene un precio menor en la bomba, "
+            "pero esta opción tiene un costo estimado menor incluyendo la "
+            "compra y el viaje de ida y vuelta "
+            "(${winner_total:.2f} vs ${alternative_total:.2f})."
+        ),
+        "best_reason_price": (
+            "💡 Por qué: No es la estación más cercana, pero su menor precio "
+            "produce el costo estimado más bajo incluyendo la compra y el "
+            "viaje de ida y vuelta."
+        ),
+        "best_reason_general": (
+            "💡 Por qué: Ofrece el mejor balance disponible entre precio y "
+            "distancia."
         ),
     },
 }
