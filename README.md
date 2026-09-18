@@ -263,7 +263,14 @@ http://127.0.0.1:8000/docs
 
 ```http
 GET /api/v1/gas-stations/nearby
+Authorization: Bearer <INTERNAL_API_TOKEN>
 ```
+
+The REST gas-station endpoint is internal-only. It requires the same
+`INTERNAL_API_TOKEN` used by the manual WhatsApp send endpoint, preventing
+unauthenticated callers from consuming the configured gas-station provider
+quota. The WhatsApp conversation flow does not call this HTTP endpoint; it
+uses the station-search service directly.
 
 Supported parameters:
 

@@ -1,3 +1,5 @@
+import pytest
+
 from fastapi.testclient import TestClient
 from app.conversation import ConversationSession, ConversationState
 from app.main import app
@@ -19,8 +21,27 @@ from app.services.whatsapp import (
 )
 from app.i18n import t
 from app.providers.here import HereFuelPricesProvider
+from app.security import internal_api
 
-client = TestClient(app)
+TEST_INTERNAL_API_TOKEN = "test-internal-token"
+
+client = TestClient(
+    app,
+    headers={
+        "Authorization": f"Bearer {TEST_INTERNAL_API_TOKEN}",
+    },
+)
+
+
+@pytest.fixture(autouse=True)
+def configure_internal_api_token(monkeypatch):
+    monkeypatch.setattr(
+        internal_api,
+        "INTERNAL_API_TOKEN",
+        TEST_INTERNAL_API_TOKEN,
+    )
+
+
 
 
 class FakeGoogleResponse:

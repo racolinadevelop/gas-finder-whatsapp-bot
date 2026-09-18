@@ -1,8 +1,9 @@
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.schemas import GasStationsResponse
+from app.security import require_internal_api_token
 from app.providers import GasStationProviderError
 from app.services.stations import search_nearby_gas_stations
 
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/api/v1/gas-stations", tags=["gas-stations"])
 @router.get(
     "/nearby",
     response_model=GasStationsResponse,
+    dependencies=[Depends(require_internal_api_token)],
 )
 def get_nearby_gas_stations(
     latitude: float = Query(..., ge=-90, le=90),
