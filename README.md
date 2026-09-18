@@ -184,6 +184,7 @@ WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_BUSINESS_ACCOUNT_ID=
 WHATSAPP_API_VERSION=
 WHATSAPP_VERIFY_TOKEN=
+META_APP_SECRET=
 
 # Optional locally; required in production for persistent runtime state.
 REDIS_URL=
@@ -305,6 +306,10 @@ Incoming WhatsApp events:
 ```http
 POST /api/v1/whatsapp/webhook
 ```
+
+When `META_APP_SECRET` is configured, incoming POST webhook payloads are
+validated against Meta's `X-Hub-Signature-256` signature before the event is
+processed. Local development can leave the variable empty.
 
 Production callback URL:
 
@@ -493,6 +498,7 @@ Never commit:
 - API keys
 - WhatsApp access tokens
 - private credentials
+- Meta App Secret
 
 Use environment variables for all secrets.
 

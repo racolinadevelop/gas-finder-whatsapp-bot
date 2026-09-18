@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
-from app.config import WHATSAPP_VERIFY_TOKEN
+from app.config import META_APP_SECRET, WHATSAPP_VERIFY_TOKEN
 from app.handlers.whatsapp import handle_whatsapp_webhook
 from app.schemas import WhatsAppMessageRequest
+from app.security import verify_meta_webhook_signature
 from app.services.whatsapp import WhatsAppServiceError, send_text_message
 
 router = APIRouter(prefix="/api/v1/whatsapp", tags=["whatsapp"])
@@ -43,5 +44,19 @@ def verify_whatsapp_webhook(
 
 @router.post("/webhook")
 async def receive_whatsapp_webhook(request: Request):
+    raw_body = await request.body()
+
+    if META_APP_SECRET:
+        signature = request.headers.get("x-hub-signature-256")
+        if not verify_meta_webhook_signature(
+            raw_body,
+            signature,
+            META_APP_SECRET,
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid webhook signature.",
+            )
+
     payload = await request.json()
     return handle_whatsapp_webhook(payload)
