@@ -1,16 +1,22 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
 from app.config import META_APP_SECRET, WHATSAPP_VERIFY_TOKEN
 from app.handlers.whatsapp import handle_whatsapp_webhook
 from app.schemas import WhatsAppMessageRequest
-from app.security import verify_meta_webhook_signature
+from app.security import (
+    require_internal_api_token,
+    verify_meta_webhook_signature,
+)
 from app.services.whatsapp import WhatsAppServiceError, send_text_message
 
 router = APIRouter(prefix="/api/v1/whatsapp", tags=["whatsapp"])
 
 
-@router.post("/send-message")
+@router.post(
+    "/send-message",
+    dependencies=[Depends(require_internal_api_token)],
+)
 def send_whatsapp_message(payload: WhatsAppMessageRequest):
     try:
         return send_text_message(

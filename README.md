@@ -185,6 +185,7 @@ WHATSAPP_BUSINESS_ACCOUNT_ID=
 WHATSAPP_API_VERSION=
 WHATSAPP_VERIFY_TOKEN=
 META_APP_SECRET=
+INTERNAL_API_TOKEN=
 
 # Optional locally; required in production for persistent runtime state.
 REDIS_URL=
@@ -300,6 +301,16 @@ Webhook verification:
 ```http
 GET /api/v1/whatsapp/webhook
 ```
+
+Internal manual message endpoint:
+
+```http
+POST /api/v1/whatsapp/send-message
+Authorization: Bearer <INTERNAL_API_TOKEN>
+```
+
+This endpoint is disabled unless `INTERNAL_API_TOKEN` is configured and
+rejects requests without the matching bearer token.
 
 Incoming WhatsApp events:
 
@@ -499,6 +510,7 @@ Never commit:
 - WhatsApp access tokens
 - private credentials
 - Meta App Secret
+- internal API tokens
 
 Use environment variables for all secrets.
 
