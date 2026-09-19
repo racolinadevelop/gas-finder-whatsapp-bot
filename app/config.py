@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
+
 GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
 HERE_API_KEY = os.getenv("HERE_API_KEY")
 GAS_STATION_PROVIDER = os.getenv("GAS_STATION_PROVIDER", "google").lower()
@@ -72,3 +74,57 @@ if GAS_STATION_PROVIDER == "google" and not GOOGLE_MAPS_API_KEY:
 
 if GAS_STATION_PROVIDER == "here" and not HERE_API_KEY:
     raise RuntimeError("HERE_API_KEY is not configured")
+
+
+PRODUCTION_REQUIRED_SETTINGS = (
+    "WHATSAPP_ACCESS_TOKEN",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_VERIFY_TOKEN",
+    "META_APP_SECRET",
+    "INTERNAL_API_TOKEN",
+    "REDIS_URL",
+    "DATABASE_URL",
+)
+
+
+def validate_production_configuration(
+    settings: dict[str, str | None],
+    *,
+    api_docs_enabled: bool,
+) -> None:
+    missing = [
+        name
+        for name in PRODUCTION_REQUIRED_SETTINGS
+        if not settings.get(name)
+    ]
+
+    if missing:
+        raise RuntimeError(
+            "Missing required production settings: "
+            + ", ".join(missing)
+        )
+
+    if api_docs_enabled:
+        raise RuntimeError(
+            "API_DOCS_ENABLED must be false in production"
+        )
+
+
+if APP_ENV not in {"development", "test", "production"}:
+    raise RuntimeError(
+        "APP_ENV must be 'development', 'test', or 'production'"
+    )
+
+if APP_ENV == "production":
+    validate_production_configuration(
+        {
+            "WHATSAPP_ACCESS_TOKEN": WHATSAPP_ACCESS_TOKEN,
+            "WHATSAPP_PHONE_NUMBER_ID": WHATSAPP_PHONE_NUMBER_ID,
+            "WHATSAPP_VERIFY_TOKEN": WHATSAPP_VERIFY_TOKEN,
+            "META_APP_SECRET": META_APP_SECRET,
+            "INTERNAL_API_TOKEN": INTERNAL_API_TOKEN,
+            "REDIS_URL": REDIS_URL,
+            "DATABASE_URL": DATABASE_URL,
+        },
+        api_docs_enabled=API_DOCS_ENABLED,
+    )

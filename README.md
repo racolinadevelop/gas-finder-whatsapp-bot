@@ -525,6 +525,15 @@ Planned features include:
 - Docker
 - Additional production monitoring
 
+## Production Configuration Validation
+
+Set `APP_ENV=production` in Railway to enable strict startup validation.
+Production startup requires the WhatsApp access token and phone number ID,
+webhook verify token, Meta App Secret, internal API token, Redis URL, and
+PostgreSQL URL. API documentation must also be disabled. Missing critical
+configuration stops startup immediately instead of allowing a partially
+configured service to accept traffic.
+
 ## Production Logging
 
 Application logs intentionally avoid storing WhatsApp message text, user names,
