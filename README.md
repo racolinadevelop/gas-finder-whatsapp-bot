@@ -1,5 +1,7 @@
 # Gas Finder WhatsApp Bot
 
+![Tests](https://github.com/racolinadevelop/gas-finder-whatsapp-bot/actions/workflows/tests.yml/badge.svg)
+
 A backend project built with Python and FastAPI that helps users find nearby gas stations, compare available fuel prices, and receive the results directly through WhatsApp.
 
 The application is connected to the Meta WhatsApp Business Platform and can use Google Places API (New) or HERE Fuel Prices API to retrieve real gas station information.
@@ -387,7 +389,11 @@ User
 
 ## Automated Tests
 
-Run:
+GitHub Actions runs the full pytest suite automatically on every push to
+`main` and on every pull request. The CI workflow uses test-only environment
+values and does not require production secrets.
+
+Run locally:
 
 ```bash
 python -m pytest -v
