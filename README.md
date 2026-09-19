@@ -391,7 +391,10 @@ User
 
 GitHub Actions runs the full pytest suite automatically on every push to
 `main` and on every pull request. The CI workflow uses test-only environment
-values and does not require production secrets.
+values and does not require production secrets. A separate dependency audit
+also checks `requirements.txt` for known Python package vulnerabilities.
+Dependabot checks Python packages and GitHub Actions weekly and can open
+controlled update pull requests.
 
 Run locally:
 
