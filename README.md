@@ -12,11 +12,8 @@ Production backend:
 https://gas-finder-whatsapp-bot-production.up.railway.app
 ```
 
-Swagger documentation:
-
-```text
-https://gas-finder-whatsapp-bot-production.up.railway.app/docs
-```
+Swagger documentation is intended for local development and can be disabled
+in production with `API_DOCS_ENABLED=false`.
 
 ## Current Architecture
 
@@ -186,6 +183,9 @@ WHATSAPP_API_VERSION=
 WHATSAPP_VERIFY_TOKEN=
 META_APP_SECRET=
 INTERNAL_API_TOKEN=
+
+# Keep true for local Swagger/OpenAPI; set false in production.
+API_DOCS_ENABLED=true
 
 # Optional locally; required in production for persistent runtime state.
 REDIS_URL=

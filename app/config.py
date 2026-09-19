@@ -27,6 +27,11 @@ AI_INTENT_ENABLED = os.getenv("AI_INTENT_ENABLED", "false").lower() in {
 REDIS_URL = os.getenv("REDIS_URL")
 REDIS_KEY_PREFIX = os.getenv("REDIS_KEY_PREFIX", "gas-finder")
 DATABASE_URL = os.getenv("DATABASE_URL")
+API_DOCS_ENABLED = os.getenv("API_DOCS_ENABLED", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 
 def positive_int_setting(name: str, default: int) -> int:
