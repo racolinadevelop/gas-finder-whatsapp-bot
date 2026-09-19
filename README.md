@@ -77,7 +77,7 @@ WhatsApp response
 
 ## Technologies
 
-- Python
+- Python 3.13.15
 - FastAPI
 - Uvicorn
 - Pydantic
