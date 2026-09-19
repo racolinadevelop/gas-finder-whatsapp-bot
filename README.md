@@ -514,6 +514,13 @@ Planned features include:
 - Docker
 - Additional production monitoring
 
+## Production Logging
+
+Application logs intentionally avoid storing WhatsApp message text, user names,
+phone numbers, or location coordinates. Operational logs record only technical
+events such as message type, provider failures, duplicate webhook handling,
+rate-limit events, and aggregate search counts.
+
 ## Security
 
 Never commit:

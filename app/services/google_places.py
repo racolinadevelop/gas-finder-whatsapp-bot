@@ -1,9 +1,13 @@
+import logging
+
 import httpx
 
 from app.config import GOOGLE_MAPS_API_KEY
 from app.providers import GasStationProviderError
 from app.utils.distance import calculate_distance_miles
 from app.utils.cost import calculate_estimated_cost
+
+logger = logging.getLogger(__name__)
 
 GOOGLE_PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 GOOGLE_CANDIDATE_LIMIT = 20
@@ -125,18 +129,18 @@ def _log_search_summary(
     fuel_type: str,
     sort: str,
 ) -> None:
-    print(
+    logger.info(
         (
-            "[GooglePlaces] "
-            f"pages={pages} "
-            f"candidates={candidates} "
-            f"within_radius={within_radius} "
-            f"priced={priced} "
-            f"results={results} "
-            f"fuel={fuel_type} "
-            f"sort={sort}"
+            "Google Places search pages=%s candidates=%s "
+            "within_radius=%s priced=%s results=%s fuel=%s sort=%s"
         ),
-        flush=True,
+        pages,
+        candidates,
+        within_radius,
+        priced,
+        results,
+        fuel_type,
+        sort,
     )
 
 

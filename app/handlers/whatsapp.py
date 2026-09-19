@@ -1,3 +1,5 @@
+import logging
+
 from app.constants import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.conversation import (
     ConversationSession,
@@ -39,6 +41,8 @@ from app.services.whatsapp import (
 from app.subscriptions import SubscriptionService
 from app.runtime import build_runtime_state
 
+logger = logging.getLogger(__name__)
+
 GREETINGS = {
     "hi",
     "hello",
@@ -78,7 +82,7 @@ def send_prompt(sender: str, prompt: Prompt) -> None:
         elif isinstance(prompt, TextPrompt):
             send_text_message(to=sender, message=prompt.message)
     except WhatsAppServiceError as exc:
-        print(f"Could not send conversation prompt: {exc}")
+        logger.warning("Could not send conversation prompt: %s", exc)
 
 
 conversation_state_handlers = ConversationStateHandlers(
@@ -162,15 +166,17 @@ def handle_whatsapp_webhook(payload: dict) -> dict:
     incoming_message = parse_incoming_message(payload)
 
     if not incoming_message:
-        print("WhatsApp webhook event without a user message.")
+        logger.info("WhatsApp webhook event without a user message")
         return {"status": "ok"}
 
     if not message_deduplicator.claim(incoming_message.message_id):
-        print("Ignoring duplicate WhatsApp message.")
+        logger.info("Ignoring duplicate WhatsApp message")
         return {"status": "ok"}
 
-    print("Incoming WhatsApp message:")
-    print(incoming_message)
+    logger.info(
+        "Incoming WhatsApp message type=%s",
+        incoming_message.message_type,
+    )
 
     try:
         subscription_service.ensure_user(incoming_message.sender)
@@ -198,7 +204,7 @@ def apply_search_flow_decision(
                 ),
             )
         except WhatsAppServiceError as exc:
-            print(f"Could not send distance validation message: {exc}")
+            logger.warning("Could not send distance validation message: %s", exc)
         return
 
     session = conversation_transitions.apply(
@@ -300,7 +306,7 @@ def search_from_location(
                 ),
             )
         except WhatsAppServiceError as exc:
-            print(f"Unable to send search rate-limit reply: {exc}")
+            logger.warning("Unable to send search rate-limit reply: %s", exc)
         return
 
     try:
@@ -310,7 +316,7 @@ def search_from_location(
             longitude=longitude,
         )
     except GasStationProviderError as exc:
-        print(f"Unable to search gas stations: {exc}")
+        logger.warning("Unable to search gas stations: %s", exc)
         try:
             send_text_message(
                 to=sender,
@@ -320,7 +326,7 @@ def search_from_location(
                 ),
             )
         except WhatsAppServiceError as send_exc:
-            print(f"Unable to send search error reply: {send_exc}")
+            logger.warning("Unable to send search error reply: %s", send_exc)
         return
 
     try:
@@ -329,7 +335,7 @@ def search_from_location(
             message=reply,
         )
     except WhatsAppServiceError as exc:
-        print(f"Unable to send WhatsApp reply: {exc}")
+        logger.warning("Unable to send WhatsApp reply: %s", exc)
         return
 
     conversation_transitions.finish(sender)
@@ -357,9 +363,9 @@ def handle_location_message(incoming_message: IncomingMessage) -> None:
 
 
 def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
-    print(
-        "WhatsApp message type is not supported yet: "
-        f"{incoming_message.message_type}"
+    logger.info(
+        "WhatsApp message type is not supported yet: %s",
+        incoming_message.message_type,
     )
 
     session = conversation_transitions.ensure_started(
