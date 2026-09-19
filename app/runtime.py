@@ -6,6 +6,8 @@ from app.config import (
     DATABASE_URL,
     REDIS_KEY_PREFIX,
     REDIS_URL,
+    SEARCH_RATE_LIMIT_MAX,
+    SEARCH_RATE_LIMIT_WINDOW_SECONDS,
     WHATSAPP_DEDUP_TTL_SECONDS,
 )
 from app.conversation import (
@@ -13,6 +15,11 @@ from app.conversation import (
     RedisConversationStore,
 )
 from app.persistence import RedisClient, build_redis_client
+from app.rate_limits import (
+    InMemorySearchRateLimiter,
+    RedisSearchRateLimiter,
+    SearchRateLimiter,
+)
 from app.subscriptions import (
     InMemorySubscriptionStore,
     PostgresSubscriptionStore,
@@ -32,6 +39,7 @@ class RuntimeState:
     subscription_store: (
         InMemorySubscriptionStore | PostgresSubscriptionStore
     )
+    search_rate_limiter: SearchRateLimiter
     backend: str
     subscription_backend: str
 
@@ -43,6 +51,8 @@ def build_runtime_state(
     key_prefix: str = REDIS_KEY_PREFIX,
     conversation_ttl_seconds: int = CONVERSATION_TTL_SECONDS,
     dedup_ttl_seconds: int = WHATSAPP_DEDUP_TTL_SECONDS,
+    search_rate_limit: int = SEARCH_RATE_LIMIT_MAX,
+    search_rate_window_seconds: int = SEARCH_RATE_LIMIT_WINDOW_SECONDS,
     database_url: str | None = DATABASE_URL,
     postgres_connect_fn: Callable[[str], object] | None = None,
 ) -> RuntimeState:
@@ -63,6 +73,10 @@ def build_runtime_state(
                 ttl_seconds=dedup_ttl_seconds,
             ),
             subscription_store=subscription_store,
+            search_rate_limiter=InMemorySearchRateLimiter(
+                limit=search_rate_limit,
+                window_seconds=search_rate_window_seconds,
+            ),
             backend="memory",
             subscription_backend=subscription_backend,
         )
@@ -81,6 +95,12 @@ def build_runtime_state(
             ttl_seconds=dedup_ttl_seconds,
         ),
         subscription_store=subscription_store,
+        search_rate_limiter=RedisSearchRateLimiter(
+            client,
+            key_prefix=key_prefix,
+            limit=search_rate_limit,
+            window_seconds=search_rate_window_seconds,
+        ),
         backend="redis",
         subscription_backend=subscription_backend,
     )

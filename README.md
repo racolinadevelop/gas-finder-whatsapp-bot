@@ -193,6 +193,10 @@ REDIS_KEY_PREFIX=gas-finder
 CONVERSATION_TTL_SECONDS=604800
 WHATSAPP_DEDUP_TTL_SECONDS=86400
 
+# Per-user gas-station search rate limiting.
+SEARCH_RATE_LIMIT_MAX=10
+SEARCH_RATE_LIMIT_WINDOW_SECONDS=300
+
 # Optional locally; use Railway PostgreSQL in production for subscriptions.
 DATABASE_URL=
 ```
@@ -441,13 +445,15 @@ railway.toml
 
 Production credentials are stored using Railway environment variables.
 
-For shared conversation state and webhook deduplication, add a Redis service
-to the Railway project and expose its connection URL to the application as
-`REDIS_URL`. When configured, conversations remain available for seven days
-and processed WhatsApp message IDs for 24 hours by default. Both durations can
-be changed with the environment variables shown above. The application checks
-the Redis connection during startup so an invalid configuration fails before
-it begins accepting webhooks.
+For shared conversation state, webhook deduplication, and per-user search
+rate limiting, add a Redis service to the Railway project and expose its
+connection URL to the application as `REDIS_URL`. When configured,
+conversations remain available for seven days and processed WhatsApp message
+IDs for 24 hours by default. Real gas-station searches are limited to 10 per
+user in a five-minute window by default. These values can be changed with the
+environment variables shown above. The application checks the Redis connection
+during startup so an invalid configuration fails before it begins accepting
+webhooks.
 
 For persistent Free/Premium state, add a PostgreSQL service to the Railway
 project and expose its connection URL to the application as `DATABASE_URL`.

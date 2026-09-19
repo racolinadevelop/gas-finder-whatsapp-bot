@@ -50,6 +50,14 @@ WHATSAPP_DEDUP_TTL_SECONDS = positive_int_setting(
     "WHATSAPP_DEDUP_TTL_SECONDS",
     24 * 60 * 60,
 )
+SEARCH_RATE_LIMIT_MAX = positive_int_setting(
+    "SEARCH_RATE_LIMIT_MAX",
+    10,
+)
+SEARCH_RATE_LIMIT_WINDOW_SECONDS = positive_int_setting(
+    "SEARCH_RATE_LIMIT_WINDOW_SECONDS",
+    5 * 60,
+)
 
 if GAS_STATION_PROVIDER not in {"google", "here"}:
     raise RuntimeError("GAS_STATION_PROVIDER must be 'google' or 'here'")

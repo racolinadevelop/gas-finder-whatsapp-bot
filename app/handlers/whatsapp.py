@@ -56,6 +56,7 @@ subscription_service = SubscriptionService(runtime_state.subscription_store)
 location_search_service = LocationSearchService()
 conversation_transitions = ConversationTransitions(conversation_store)
 message_deduplicator = runtime_state.message_deduplicator
+search_rate_limiter = runtime_state.search_rate_limiter
 
 
 def send_prompt(sender: str, prompt: Prompt) -> None:
@@ -287,6 +288,19 @@ def search_from_location(
     longitude = incoming_message.longitude
 
     if latitude is None or longitude is None:
+        return
+
+    if not search_rate_limiter.allow(sender):
+        try:
+            send_text_message(
+                to=sender,
+                message=t(
+                    session.language,
+                    "search_rate_limited",
+                ),
+            )
+        except WhatsAppServiceError as exc:
+            print(f"Unable to send search rate-limit reply: {exc}")
         return
 
     try:

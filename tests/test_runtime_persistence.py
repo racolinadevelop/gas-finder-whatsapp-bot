@@ -8,6 +8,10 @@ from app.conversation import (
     InMemoryConversationStore,
     RedisConversationStore,
 )
+from app.rate_limits import (
+    InMemorySearchRateLimiter,
+    RedisSearchRateLimiter,
+)
 from app.runtime import build_runtime_state
 from app.webhooks import (
     InMemoryMessageDeduplicator,
@@ -176,6 +180,10 @@ def test_runtime_uses_memory_without_redis_url():
         state.message_deduplicator,
         InMemoryMessageDeduplicator,
     )
+    assert isinstance(
+        state.search_rate_limiter,
+        InMemorySearchRateLimiter,
+    )
 
 
 def test_runtime_uses_and_checks_redis_when_configured():
@@ -192,4 +200,5 @@ def test_runtime_uses_and_checks_redis_when_configured():
     assert state.backend == "redis"
     assert isinstance(state.conversation_store, RedisConversationStore)
     assert isinstance(state.message_deduplicator, RedisMessageDeduplicator)
+    assert isinstance(state.search_rate_limiter, RedisSearchRateLimiter)
     assert client.ping_count == 1

@@ -141,6 +141,10 @@ TRANSLATIONS = {
             "preferences are still saved. Please share your location again "
             "in a moment."
         ),
+        "search_rate_limited": (
+            "⏳ You've made several gas-station searches in a short time. "
+            "Please wait a few minutes and share your location again."
+        ),
         "results_count": (
             "📊 Results shown: {count}"
         ),
@@ -310,6 +314,10 @@ TRANSLATIONS = {
             "⚠️ No pude buscar gasolineras en este momento. Tus preferencias "
             "siguen guardadas. Por favor, comparte tu ubicación nuevamente "
             "en un momento."
+        ),
+        "search_rate_limited": (
+            "⏳ Has realizado demasiadas búsquedas de gasolineras en poco "
+            "tiempo. Espera unos minutos y comparte tu ubicación nuevamente."
         ),
         "results_count": (
             "📊 Resultados mostrados: {count}"
