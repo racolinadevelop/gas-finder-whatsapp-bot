@@ -127,3 +127,33 @@ not the internal token. Do not expose the admin token in a client application.
 - Disabling `STRIPE_TEST_MODE_ENABLED` restores Free-only feature checks for
   users whose sole entitlement came from this sandbox. It does not delete
   their test records; re-enabling the flag will read those records again.
+
+
+## First Premium WhatsApp feature: saved stations
+
+In a completed WhatsApp gas-station search, a user with **current Premium
+access** sees Save 1–5 choices for the same five stations already shown, along
+with Back and Menu in a single list. From any conversation step, the user may
+type `mis favoritas` / `my favorites` to view saved station names and addresses,
+`guardar 1` / `save 1` to save a station from the latest delivered results, or
+`eliminar favorita 1` / `remove favorite 1` to remove one. Up to ten favorites
+are supported. Search result numbers expire after 24 hours; the saved list
+persists across server restarts in PostgreSQL. Stored favorite snapshots contain
+station identity, name and address, **not** the user's coordinates, price or
+travel history. Favorites are saved from the existing Places/Routes search; no
+additional Google API calls are made to save or list them. Saved addresses
+are snapshots, not live price or opening-hour information.
+
+Every favorites read/write checks the authenticated WhatsApp sender's
+`Feature.FAVORITES` entitlement on the server. An expired or canceled Stripe
+test subscription cannot read or mutate favorites, but its saved items remain
+for a possible future verified Premium entitlement. Free users retain the
+same gas-station search flow and navigation. The initial bilingual `Mi plan`
+message has been shortened.
+
+Stripe **test-only** payments remain the only Checkout flow. The sandbox
+currently cannot attach a second subscription to a test user already linked
+to a canceled subscription: use another user you control, or perform a
+separately reviewed cleanup of *test-only* subscription tables before an
+additional end-to-end sandbox checkout. The automated Premium/Free/canceled
+favorites tests never require real charges or new Google API requests.
