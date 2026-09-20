@@ -56,9 +56,9 @@ def test_menu_navigation_resets_all_preferences():
 
     assert session.state == ConversationState.MAIN_MENU
     assert session.language == "es"
-    assert session.fuel_type == "diesel"
-    assert session.sort == "price"
-    assert session.max_distance_miles == 5
+    assert session.fuel_type == "regular"
+    assert session.sort == "best"
+    assert session.max_distance_miles is None
 
 
 def test_back_navigation_preserves_preferences():
@@ -209,4 +209,4 @@ def test_menu_resets_preferences_but_keeps_display_name():
     assert session.state == ConversationState.MAIN_MENU
     assert session.profile_name == "Ramon"
     assert session.language == "es"
-    assert session.fuel_type == "diesel"
+    assert session.fuel_type == "regular"
