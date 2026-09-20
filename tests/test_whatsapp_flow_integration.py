@@ -647,3 +647,16 @@ def test_existing_saved_search_language_is_migrated_on_next_greeting(bot):
     assert bot.sent[-1][1]["button_text"] == "Abrir menú"
     assert handler.user_language_store.get(SENDER) == "es"
     assert bot.searches == []
+
+
+def test_active_legacy_chat_language_is_saved_without_repeating_language_screen(bot):
+    handler.conversation_store.update(
+        SENDER, state=ConversationState.WAITING_FUEL, language="es",
+    )
+    assert handler.user_language_store.get(SENDER) is None
+    bot.text("hola")
+    bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+    assert handler.user_language_store.get(SENDER) == "es"
+    assert bot.searches == []
