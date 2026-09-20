@@ -115,10 +115,16 @@ not the internal token. Do not expose the admin token in a client application.
   as a sandbox entitlement change. Early unlinked invoice events are ignored;
   a later completed Checkout reconciles Stripe's current subscription state.
   Duplicate events cannot apply twice.
-- A test user may link only one subscription in this sandbox version. An
-  existing linked customer uses its test portal; onboarding a **new**
-  subscription after immediate cancellation currently requires a new test
-  WhatsApp user or a controlled cleanup of the test-only tables.
+- This sandbox allows one linked subscription per test user **at a time**.
+  To run another paid test after **immediate** cancellation, the admin may
+  run `python scripts/stripe_sandbox_smoke.py reset` and then `checkout`
+  again. Reset requires the internal API token, the ledger status `canceled`,
+  and a fresh Stripe TEST API verification that the linked subscription is
+  canceled. It clears only test Checkout bindings and the test entitlement
+  for that WhatsApp sender. Previous test event receipts remain recorded;
+  favorites, language settings, normal subscriptions and other users are
+  untouched. Signed late webhook events for old Checkouts are ignored. This
+  is a *test-only administrator reset*, not a production resubscription flow.
 - This implementation is a sandbox, **not production billing**. Production
   would require a truly authenticated public self-service journey, robust
   reconciliation for concurrent and out-of-order webhooks, separate live
@@ -151,12 +157,15 @@ for a possible future verified Premium entitlement. Free users retain the
 same gas-station search flow and navigation. The initial bilingual `Mi plan`
 message has been shortened.
 
-Stripe **test-only** payments remain the only Checkout flow. The sandbox
-currently cannot attach a second subscription to a test user already linked
-to a canceled subscription: use another user you control, or perform a
-separately reviewed cleanup of *test-only* subscription tables before an
-additional end-to-end sandbox checkout. The automated Premium/Free/canceled
-favorites tests never require real charges or new Google API requests.
+Stripe **test-only** payments remain the only Checkout flow. After
+cancellation, an administrator can run `python scripts/stripe_sandbox_smoke.py
+reset` and then `python scripts/stripe_sandbox_smoke.py checkout` to repeat
+the test with the same WhatsApp user. Reset discards the old *test billing
+linkage only* after verifying its Stripe TEST subscription was canceled.
+Saved favorite stations and language remain untouched. This is a test-only
+workflow, not a general customer resubscription feature. The automated
+Premium/Free/canceled favorites tests never require real charges or new
+Google API requests.
 
 
 ## WhatsApp home and language preference
