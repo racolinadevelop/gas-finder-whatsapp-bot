@@ -17,16 +17,13 @@ from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
+from app.presentation.delivery import deliver_prompt
 from app.presentation import (
-    ListPrompt,
     Prompt,
-    ReplyButtonsPrompt,
-    TextPrompt,
     build_distance_prompt,
     build_fuel_prompt,
     build_language_prompt,
     build_location_prompt,
-    build_navigation_prompt,
     build_results_navigation_prompt,
     build_sort_prompt,
     build_state_prompt,
@@ -68,41 +65,14 @@ search_rate_limiter = runtime_state.search_rate_limiter
 def send_prompt(sender: str, prompt: Prompt) -> None:
     session = conversation_store.get(sender)
     try:
-        if isinstance(prompt, ReplyButtonsPrompt):
-            send_reply_buttons(
-                to=sender,
-                body_text=prompt.body_text,
-                buttons=prompt.buttons,
-            )
-        elif isinstance(prompt, ListPrompt):
-            send_list_message(
-                to=sender,
-                body_text=prompt.body_text,
-                button_text=prompt.button_text,
-                section_title=prompt.section_title,
-                rows=prompt.rows,
-            )
-        elif isinstance(prompt, TextPrompt):
-            send_text_message(to=sender, message=prompt.message)
-
-        # Send navigation after the primary prompt, including the native
-        # location request, so Back/Menu appear below Share Location.
-        # Language and final-results prompts already have their own buttons.
-        if (
-            session is not None
-            and session.state
-            not in {
-                ConversationState.NEW,
-                ConversationState.WAITING_LANGUAGE,
-                ConversationState.WAITING_RESULTS,
-            }
-        ):
-            navigation = build_navigation_prompt(session.language)
-            send_reply_buttons(
-                to=sender,
-                body_text=navigation.body_text,
-                buttons=navigation.buttons,
-            )
+        deliver_prompt(
+            sender,
+            prompt,
+            session,
+            send_buttons=send_reply_buttons,
+            send_list=send_list_message,
+            send_text=send_text_message,
+        )
     except WhatsAppServiceError as exc:
         logger.warning("Could not send conversation prompt: %s", exc)
 
