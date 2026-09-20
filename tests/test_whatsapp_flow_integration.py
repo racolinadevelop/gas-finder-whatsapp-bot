@@ -303,3 +303,62 @@ def test_status_only_webhook_has_no_conversation_side_effects(bot):
     assert bot.users == []
     assert bot.sent == []
     assert bot.searches == []
+
+
+
+def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeypatch):
+    from app.subscriptions.models import UserSubscription
+
+    class SandboxLedger:
+        status = "active"
+
+        def get_test_subscription(self, sender):
+            assert sender == SENDER
+            return {"status": self.status}
+
+    ledger = SandboxLedger()
+    monkeypatch.setattr(handler, "test_billing_store", ledger)
+    monkeypatch.setattr(
+        handler.subscription_service,
+        "get_subscription",
+        lambda sender: UserSubscription(whatsapp_id=sender),
+    )
+
+    bot.text("hola")
+    bot.button("account_plan")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_LANGUAGE
+    )
+    bot.assert_sent("buttons", "text")
+    assert "Premium (Stripe test)" in bot.sent[-1][1]["message"]
+    assert "Premium (prueba de Stripe)" in bot.sent[-1][1]["message"]
+
+    bot.sent.clear()
+    bot.button("lang_es")
+    bot.button("fuel_regular", kind="list_reply")
+    bot.button("sort_price", kind="list_reply")
+    bot.button("distance_3", kind="list_reply")
+    original = handler.conversation_store.get(SENDER)
+    assert original.state == ConversationState.WAITING_LOCATION
+    bot.sent.clear()
+
+    bot.text("  MI   PLAN  ")
+    bot.assert_sent("text")
+    assert "Premium (prueba de Stripe)" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER) == original
+    assert bot.searches == []
+
+    ledger.status = "canceled"
+    bot.sent.clear()
+    bot.text("mi plan")
+    bot.assert_sent("text")
+    assert "Tu plan actual: Gratis" in bot.sent[0][1]["message"]
+    assert "cancelada" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER) == original
+
+    bot.sent.clear()
+    bot.location()
+    assert len(bot.searches) == 1
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_RESULTS
+    )
