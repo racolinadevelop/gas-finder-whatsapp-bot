@@ -381,6 +381,13 @@ def build_gas_stations_reply(
                     build_best_recommendation_explanation(stations, language)
                 )
 
+        if station.get("open_now") is True:
+            station_lines.append(t(language, "station_open_now"))
+        else:
+            # Both HERE and Google without opening-hour data are unknown.
+            # Explicitly closed Google stations are filtered before this step.
+            station_lines.append(t(language, "station_hours_unknown"))
+
         station_lines.extend(
             [
                 t(
@@ -428,6 +435,8 @@ def build_best_recommendation_explanation(
         for station in stations
         if station.get("selected_fuel", {}).get("price") is not None
         and station.get("estimated_cost") is not None
+        and (station.get("open_now") is True)
+        == (winner.get("open_now") is True)
     ]
 
     if winner not in comparable:
