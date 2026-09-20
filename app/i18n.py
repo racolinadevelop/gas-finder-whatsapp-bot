@@ -18,6 +18,11 @@ TRANSLATIONS = {
             "Por favor, selecciona tu idioma preferido."
         ),
         "navigation_buttons_prompt": "↩️ Navigation options",
+        "navigation_list_prompt": "↩️ What would you like to do next?",
+        "navigation_list_button": "Choose an option",
+        "navigation_list_section": "Navigation",
+        "nav_back_description": "Return to the previous step",
+        "nav_menu_description": "Start a new search",
 
         "invalid_language": (
             "I couldn't use that response. Please choose English or Español "
@@ -53,7 +58,7 @@ TRANSLATIONS = {
         "button_fuel_diesel": "🚛 Diesel",
         "fuel_list_button": "Choose fuel",
         "fuel_list_section": "Fuel and navigation",
-        "sort_list_button": "Choose order",
+        "sort_list_button": "Choose category",
         "sort_list_section": "Sort and navigation",
 
         "fuel_selected": (
@@ -219,6 +224,11 @@ TRANSLATIONS = {
             "Por favor, selecciona tu idioma preferido."
         ),
         "navigation_buttons_prompt": "↩️ Opciones de navegación",
+        "navigation_list_prompt": "↩️ ¿Qué deseas hacer ahora?",
+        "navigation_list_button": "Elegir opción",
+        "navigation_list_section": "Navegación",
+        "nav_back_description": "Volver al paso anterior",
+        "nav_menu_description": "Comenzar una nueva búsqueda",
 
         "invalid_language": (
             "No pude usar esa respuesta. Selecciona English o Español usando "
@@ -254,7 +264,7 @@ TRANSLATIONS = {
         "button_fuel_diesel": "🚛 Diésel",
         "fuel_list_button": "Elegir combustible",
         "fuel_list_section": "Combustible y navegación",
-        "sort_list_button": "Elegir orden",
+        "sort_list_button": "Elegir categoría",
         "sort_list_section": "Orden y navegación",
 
         "fuel_selected": (
