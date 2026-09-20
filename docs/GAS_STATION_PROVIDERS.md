@@ -11,11 +11,12 @@ WhatsApp conversation do not depend on a specific provider.
 ## Google behavior
 
 Google Places Text Search requests gas-station candidates near the supplied
-location. The application requests up to two pages of up to 20 candidates
+location. The application requests up to three pages of up to 20 candidates
 each by default (`GOOGLE_TEXT_MAX_PAGES` can be 1–3) and applies the
 requested radius locally (Text Search's location bias is not a strict
-geographic filter). Fewer pages save requests but may omit later, cheaper
-candidates, including some Sam's Club results. It then:
+geographic filter). Using only one or two pages saves requests but may omit
+later candidates, including some Sam's Club results. Three pages increase
+coverage but do not guarantee that Google returns any particular station. It then:
 
 1. Excludes businesses Google explicitly marks non-operational and stations
    whose current opening-hours response explicitly says `openNow=false`.

@@ -151,21 +151,30 @@ def test_location_search_only_invokes_routes_after_explicit_opt_in():
     assert events == [{"latitude": 38.25, "longitude": -85.75}]
 
 
-def test_whatsapp_reply_links_directions_without_calling_routes_and_labels_eta():
+def test_whatsapp_reply_uses_concise_distance_and_optional_driving_eta():
     station = places(1)["stations"][0]
     station["road_distance_miles"] = 1.57
     station["road_eta_minutes"] = 5
     reply = build_gas_stations_reply({"stations": [station]}, language="es")
-    assert "Distancia: 0.25 mi (en línea recta)" in reply
+    assert "Distancia: 0.25 mi" in reply
+    assert "en línea recta" not in reply
     assert "Por carretera: 1.57 mi · aprox. 5 min" in reply
-    assert "Cómo llegar: https://www.google.com/maps/dir/?api=1" in reply
-    assert "destination=38.25%2C-85.75" in reply
-    assert "travelmode=driving" in reply
+    assert "Cómo llegar:" not in reply
+    assert "google.com/maps/dir/" not in reply
 
 
-def test_whatsapp_reply_with_missing_coordinates_has_no_directions_link():
+def test_whatsapp_reply_has_no_directions_link_regardless_of_coordinates():
     station = places(1)["stations"][0]
+    for language, expected in [("en", "Distance: 0.25 mi"),
+                               ("es", "Distancia: 0.25 mi")]:
+        reply = build_gas_stations_reply({"stations": [station]}, language=language)
+        assert expected in reply
+        assert "straight line" not in reply
+        assert "en línea recta" not in reply
+        assert "Driving directions:" not in reply
+        assert "Cómo llegar:" not in reply
+        assert "google.com/maps/dir/" not in reply
     station.pop("latitude")
     reply = build_gas_stations_reply({"stations": [station]}, language="en")
-    assert "Driving directions:" not in reply
-    assert "straight line" in reply
+    assert "Distance: 0.25 mi" in reply
+    assert "google.com/maps/dir/" not in reply
