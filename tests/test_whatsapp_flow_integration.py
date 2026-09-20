@@ -133,6 +133,12 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
 
     bot.button("lang_es")
     bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
+    assert bot.sent[0][1]["button_text"] == "Abrir menú"
+    bot.sent.clear()
+
+    bot.button("home_search", kind="list_reply")
+    bot.assert_sent("list")
     bot.assert_last_list(["fuel_regular", "fuel_premium", "fuel_diesel",
                           "nav_back", "nav_menu"])
     assert bot.sent[0][1]["button_text"] == "Elegir combustible"
@@ -205,17 +211,17 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
 
     bot.button("nav_menu", kind="list_reply")
     reset = handler.conversation_store.get(SENDER)
-    assert reset.state == ConversationState.WAITING_LANGUAGE
+    assert reset.state == ConversationState.MAIN_MENU
     assert reset.profile_name == "Alex"
-    assert reset.max_distance_miles is None
-    bot.assert_sent("buttons")
-    bot.assert_last_buttons(["lang_en", "lang_es", "account_plan"])
+    bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
     assert bot.users and all(sender == SENDER for sender in bot.users)
 
 
 def test_english_custom_distance_stale_buttons_and_provider_error(bot):
     bot.text("hello")
     bot.button("lang_en")
+    bot.button("home_search", kind="list_reply")
     bot.button("fuel_regular", kind="list_reply")
     bot.button("sort_best", kind="list_reply")
     assert handler.conversation_store.get(SENDER).state == (
@@ -336,6 +342,7 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
 
     bot.sent.clear()
     bot.button("lang_es")
+    bot.button("home_search", kind="list_reply")
     bot.button("fuel_regular", kind="list_reply")
     bot.button("sort_price", kind="list_reply")
     bot.button("distance_3", kind="list_reply")
@@ -517,7 +524,7 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     bot.button("lang_es")
     bot.sent.clear()
     original = handler.conversation_store.get(SENDER)
-    assert original.state == ConversationState.WAITING_FUEL
+    assert original.state == ConversationState.MAIN_MENU
 
     bot.text("Mi favorita")
     bot.assert_sent("text")
@@ -526,6 +533,18 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     assert handler.conversation_store.get(SENDER) == original
     assert bot.searches == []
 
+    bot.sent.clear()
+    bot.button("home_search", kind="list_reply")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_FUEL
+    )
+    bot.sent.clear()
+    bot.text("Mi favorita")
+    bot.assert_sent("text")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_FUEL
+    )
     bot.sent.clear()
     bot.button("fuel_regular", kind="list_reply")
     assert handler.conversation_store.get(SENDER).state == (
