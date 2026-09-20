@@ -29,7 +29,7 @@ from app.presentation import (
     build_sort_prompt,
     build_state_prompt,
 )
-from app.routing import ConversationStateRouter, MessageRouter
+from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
     WhatsAppServiceError,
@@ -328,43 +328,16 @@ def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
     send_expected_prompt(incoming_message.sender, session)
 
 
-text_state_router = ConversationStateRouter(
-    handlers={
-        ConversationState.WAITING_DISTANCE: (
-            conversation_state_handlers.distance_text
-        ),
-        ConversationState.WAITING_CUSTOM_DISTANCE: (
-            conversation_state_handlers.distance_text
-        ),
-    }
-)
-
-interactive_state_router = ConversationStateRouter(
-    handlers={
-        ConversationState.WAITING_FUEL: (
-            conversation_state_handlers.fuel_interaction
-        ),
-        ConversationState.WAITING_SORT: (
-            conversation_state_handlers.sort_interaction
-        ),
-        ConversationState.WAITING_DISTANCE: (
-            conversation_state_handlers.distance_interaction
-        ),
-    }
-)
-
-location_state_router = ConversationStateRouter(
-    handlers={
-        ConversationState.WAITING_LOCATION: search_from_location,
-    }
-)
-
-
-message_router = MessageRouter(
-    handlers={
-        "text": handle_text_message,
-        "interactive": handle_interactive_message,
-        "location": handle_location_message,
-    },
-    default_handler=handle_unsupported_message,
+(
+    text_state_router,
+    interactive_state_router,
+    location_state_router,
+    message_router,
+) = build_whatsapp_routers(
+    state_handlers=conversation_state_handlers,
+    search_from_location=search_from_location,
+    handle_text=handle_text_message,
+    handle_interactive=handle_interactive_message,
+    handle_location=handle_location_message,
+    handle_unsupported=handle_unsupported_message,
 )
