@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 from app.config import ROUTES_API_ENABLED
 from app.conversation.models import ConversationSession
-from app.services.road_routes import add_road_routes
+from app.services.road_routes import add_road_routes, rank_displayed_stations_by_road
 from app.services.stations import search_nearby_gas_stations
 from app.services.whatsapp import build_gas_stations_reply
 
@@ -56,11 +56,22 @@ class LocationSearchService:
         )
 
         if self._routes_enabled and result.get("stations"):
+            # The Places search/radius selects candidates first. Only the
+            # displayed stations get billable Routes matrix elements.
             result = self._route_enricher(
                 result,
                 latitude=latitude,
                 longitude=longitude,
             )
+            result = rank_displayed_stations_by_road(
+                result,
+                sort=session.sort,
+                gallons_needed=self._gallons_needed,
+                vehicle_mpg=self._vehicle_mpg,
+            )
+            # Distinguish an unavailable driving route from a geographical
+            # estimate; never silently label the latter a driving distance.
+            result = {**result, "routes_requested": True}
 
         return self._reply_builder(
             result,
