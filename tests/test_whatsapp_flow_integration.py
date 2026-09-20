@@ -331,8 +331,8 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
         ConversationState.WAITING_LANGUAGE
     )
     bot.assert_sent("buttons", "text")
-    assert "Premium (Stripe test)" in bot.sent[-1][1]["message"]
-    assert "Premium (prueba de Stripe)" in bot.sent[-1][1]["message"]
+    assert "Premium (test)" in bot.sent[-1][1]["message"]
+    assert "Premium (prueba)" in bot.sent[-1][1]["message"]
 
     bot.sent.clear()
     bot.button("lang_es")
