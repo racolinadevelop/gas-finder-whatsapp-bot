@@ -405,6 +405,7 @@ def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeyp
 
     bot.text("hola")
     bot.button("lang_es")
+    bot.button("home_search", kind="list_reply")
     bot.button("fuel_regular", kind="list_reply")
     bot.button("sort_price", kind="list_reply")
     bot.button("distance_3", kind="list_reply")
