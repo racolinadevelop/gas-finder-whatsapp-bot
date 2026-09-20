@@ -85,16 +85,12 @@ def run_location_search(
         # Only completed guided searches update the separate user profile.
         save_preferences(sender, SearchPreferences.from_session(session))
     favorites_ready = False
-    if (
-        isinstance(reply, SearchReply)
-        and reply.stations
-        and save_recent is not None
-    ):
+    if isinstance(reply, SearchReply) and save_recent is not None:
         try:
             favorites_ready = save_recent(sender, reply.stations)
         except Exception:
             logger.warning("Unable to store recent favorite choices")
-    if favorites_ready:
+    if favorites_ready and reply.stations:
         send_prompt(
             sender,
             build_favorites_result_navigation_prompt(
