@@ -31,7 +31,9 @@ class FakeResponse:
         self.data = data
         self.status_code = status_code
         self.request = httpx.Request("POST", "https://routes.googleapis.com/")
-        self.response = httpx.Response(status_code, request=self.request)
+        self.response = httpx.Response(
+            status_code, json=data, request=self.request
+        )
 
     def raise_for_status(self):
         self.response.raise_for_status()
