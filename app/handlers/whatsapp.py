@@ -13,6 +13,7 @@ from app.conversation import (
 )
 from app.conversation.options import LANGUAGE_BUTTONS
 from app.handlers.conversation_states import ConversationStateHandlers
+from app.handlers.location_results import run_location_search
 from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
@@ -24,12 +25,10 @@ from app.presentation import (
     build_fuel_prompt,
     build_language_prompt,
     build_location_prompt,
-    build_results_navigation_prompt,
     build_sort_prompt,
     build_state_prompt,
 )
 from app.routing import ConversationStateRouter, MessageRouter
-from app.providers import GasStationProviderError
 from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
     WhatsAppServiceError,
@@ -300,62 +299,15 @@ def search_from_location(
     incoming_message: IncomingMessage,
     session: ConversationSession,
 ) -> None:
-    sender = incoming_message.sender
-    latitude = incoming_message.latitude
-    longitude = incoming_message.longitude
-
-    if latitude is None or longitude is None:
-        return
-
-    if not search_rate_limiter.allow(sender):
-        try:
-            send_text_message(
-                to=sender,
-                message=t(
-                    session.language,
-                    "search_rate_limited",
-                ),
-            )
-        except WhatsAppServiceError as exc:
-            logger.warning("Unable to send search rate-limit reply: %s", exc)
-        return
-
-    try:
-        reply = location_search_service.search(
-            session=session,
-            latitude=latitude,
-            longitude=longitude,
-        )
-    except GasStationProviderError as exc:
-        logger.warning("Unable to search gas stations: %s", exc)
-        try:
-            send_text_message(
-                to=sender,
-                message=t(
-                    session.language,
-                    "search_temporarily_unavailable",
-                ),
-            )
-        except WhatsAppServiceError as send_exc:
-            logger.warning("Unable to send search error reply: %s", send_exc)
-        return
-
-    try:
-        send_text_message(
-            to=sender,
-            message=reply,
-        )
-    except WhatsAppServiceError as exc:
-        logger.warning("Unable to send WhatsApp reply: %s", exc)
-        return
-
-    # Retain preferences after results so Back can request another location.
-    conversation_transitions.apply(
-        sender,
-        {"state": ConversationState.WAITING_RESULTS},
+    run_location_search(
+        incoming_message,
+        session,
+        allow_search=search_rate_limiter.allow,
+        search=location_search_service.search,
+        send_text=send_text_message,
+        update_session=conversation_transitions.apply,
+        send_prompt=send_prompt,
     )
-    send_prompt(sender, build_results_navigation_prompt(session.language))
-
 
 def handle_location_message(incoming_message: IncomingMessage) -> None:
     if (
