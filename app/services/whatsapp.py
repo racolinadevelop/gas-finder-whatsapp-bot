@@ -1,3 +1,6 @@
+import math
+from urllib.parse import urlencode
+
 import httpx
 from app.intelligence import RuleBasedIntentInterpreter
 from app.i18n import t
@@ -404,6 +407,18 @@ def build_gas_stations_reply(
             ]
         )
 
+        road_miles = station.get("road_distance_miles")
+        road_minutes = station.get("road_eta_minutes")
+        if road_miles is not None and road_minutes is not None:
+            station_lines.append(
+                t(
+                    language,
+                    "station_road_distance",
+                    distance=road_miles,
+                    minutes=road_minutes,
+                )
+            )
+
         if address:
             station_lines.append(
                 t(
@@ -412,6 +427,28 @@ def build_gas_stations_reply(
                     address=address,
                 )
             )
+
+        station_lat = station.get("latitude")
+        station_lng = station.get("longitude")
+        if (
+            isinstance(station_lat, (int, float))
+            and not isinstance(station_lat, bool)
+            and math.isfinite(station_lat)
+            and isinstance(station_lng, (int, float))
+            and not isinstance(station_lng, bool)
+            and math.isfinite(station_lng)
+            and -90 <= station_lat <= 90
+            and -180 <= station_lng <= 180
+        ):
+            # Google Maps URLs do not issue server-side API requests.
+            url = "https://www.google.com/maps/dir/?" + urlencode(
+                {
+                    "api": 1,
+                    "destination": f"{station_lat},{station_lng}",
+                    "travelmode": "driving",
+                }
+            )
+            station_lines.append(t(language, "station_directions", url=url))
 
         lines.append("\n".join(station_lines))
 
