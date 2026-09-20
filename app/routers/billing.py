@@ -37,9 +37,13 @@ class BillingUserRequest(BaseModel):
     whatsapp_id: str = Field(min_length=5, max_length=20, pattern=r"^[0-9]+$")
 
 
-def _store():
+def _require_test_mode():
     if not STRIPE_TEST_MODE_ENABLED:
         raise HTTPException(status_code=404, detail="Test billing is disabled.")
+
+
+def _store():
+    _require_test_mode()
     if test_billing_store is None:
         raise HTTPException(
             status_code=503,
@@ -66,6 +70,7 @@ def _gateway() -> StripeTestGateway:
 
 @router.post("/checkout", dependencies=[Depends(require_internal_api_token)])
 def create_test_checkout(payload: BillingUserRequest):
+    _require_test_mode()
     gateway = _gateway()
     store = _store()
     subscription = subscription_service.get_subscription(payload.whatsapp_id)
@@ -101,6 +106,7 @@ def create_test_checkout(payload: BillingUserRequest):
 
 @router.post("/portal", dependencies=[Depends(require_internal_api_token)])
 def create_test_portal(payload: BillingUserRequest):
+    _require_test_mode()
     gateway = _gateway()
     record = _store().get_test_subscription(payload.whatsapp_id)
     if record is None:
@@ -117,6 +123,7 @@ def create_test_portal(payload: BillingUserRequest):
 
 @router.post("/status", dependencies=[Depends(require_internal_api_token)])
 def get_test_subscription_status(payload: BillingUserRequest):
+    _require_test_mode()
     _gateway()
     record = _store().get_test_subscription(payload.whatsapp_id)
     return {
@@ -131,6 +138,7 @@ def get_test_subscription_status(payload: BillingUserRequest):
 
 @router.post("/webhook")
 async def receive_test_stripe_webhook(request: Request):
+    _require_test_mode()
     gateway = _gateway()
     raw_body = await request.body()
     try:
