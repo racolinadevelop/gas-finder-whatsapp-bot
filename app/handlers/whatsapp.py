@@ -234,7 +234,7 @@ def begin_or_resume(sender: str, profile_name: str | None = None) -> Conversatio
 
 def send_entry_prompt(sender: str, display_name: str | None = None) -> None:
     session = conversation_store.get(sender)
-    if session is None:
+    if session is None or session.state == ConversationState.WAITING_LANGUAGE:
         send_language_prompt(sender, display_name=display_name)
     else:
         send_state_prompt(sender, session)
