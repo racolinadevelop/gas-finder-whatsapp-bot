@@ -29,17 +29,21 @@ def capture_sent_prompts(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("state", "primary_kind"),
+    ("state", "expected_kind", "expected_rows"),
     [
-        (ConversationState.WAITING_FUEL, "buttons"),
-        (ConversationState.WAITING_SORT, "buttons"),
-        (ConversationState.WAITING_DISTANCE, "list"),
-        (ConversationState.WAITING_CUSTOM_DISTANCE, "text"),
-        (ConversationState.WAITING_LOCATION, "text"),
+        (ConversationState.WAITING_FUEL, "list",
+         ["fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu"]),
+        (ConversationState.WAITING_SORT, "list",
+         ["sort_distance", "sort_price", "sort_best", "nav_back", "nav_menu"]),
+        (ConversationState.WAITING_DISTANCE, "list",
+         ["distance_1", "distance_3", "distance_5", "distance_10",
+          "distance_custom", "nav_back", "nav_menu"]),
+        (ConversationState.WAITING_CUSTOM_DISTANCE, "text", None),
+        (ConversationState.WAITING_LOCATION, "text", None),
     ],
 )
-def test_second_screen_onwards_has_back_and_menu_buttons(
-    monkeypatch, state, primary_kind
+def test_guided_step_is_single_message_with_navigation_only_in_selection_lists(
+    monkeypatch, state, expected_kind, expected_rows
 ):
     whatsapp_handler.conversation_store.clear()
     session = whatsapp_handler.conversation_store.update(
@@ -54,15 +58,10 @@ def test_second_screen_onwards_has_back_and_menu_buttons(
 
     whatsapp_handler.send_state_prompt(SENDER, session)
 
-    assert len(sent) == 2
-    assert sent[0][0] == primary_kind
-    assert sent[1][0] == "buttons"
-    assert [button["id"] for button in sent[1][1]["buttons"]] == [
-        "nav_back", "nav_menu",
-    ]
-    assert [button["title"] for button in sent[1][1]["buttons"]] == [
-        "⬅️ Atrás", "🏠 Menú",
-    ]
+    assert len(sent) == 1
+    assert sent[0][0] == expected_kind
+    if expected_rows is not None:
+        assert [row["id"] for row in sent[0][1]["rows"]] == expected_rows
 
 
 def test_first_language_screen_only_has_language_buttons(monkeypatch):
@@ -85,7 +84,9 @@ def test_first_language_screen_only_has_language_buttons(monkeypatch):
     assert sent[0][1]["body_text"].count("Ramon") == 2
 
 
-def test_language_selection_does_not_greet_again_and_has_navigation(monkeypatch):
+def test_language_selection_has_one_fuel_list_and_does_not_greet_again(
+    monkeypatch,
+):
     whatsapp_handler.conversation_store.clear()
     whatsapp_handler.conversation_store.update(
         SENDER,
@@ -98,20 +99,19 @@ def test_language_selection_does_not_greet_again_and_has_navigation(monkeypatch)
         IncomingMessage(
             sender=SENDER,
             message_type="interactive",
+            interactive_type="button_reply",
             selection_id="lang_es",
             profile_name="Ramon",
         )
     )
 
-    assert len(sent) == 2
-    assert [button["id"] for button in sent[0][1]["buttons"]] == [
-        "fuel_regular", "fuel_premium", "fuel_diesel",
+    assert len(sent) == 1
+    assert sent[0][0] == "list"
+    assert [row["id"] for row in sent[0][1]["rows"]] == [
+        "fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu",
     ]
     assert "Hola, Ramon" not in sent[0][1]["body_text"]
     assert "bienvenido" not in sent[0][1]["body_text"].lower()
-    assert [button["id"] for button in sent[1][1]["buttons"]] == [
-        "nav_back", "nav_menu",
-    ]
 
 
 def test_results_screen_keeps_its_own_navigation_without_duplicates(monkeypatch):
@@ -131,9 +131,7 @@ def test_results_screen_keeps_its_own_navigation_without_duplicates(monkeypatch)
     ]
 
 
-def test_back_button_from_second_screen_returns_to_language_without_greeting(
-    monkeypatch,
-):
+def test_back_from_fuel_list_returns_to_language_without_greeting(monkeypatch):
     whatsapp_handler.conversation_store.clear()
     whatsapp_handler.conversation_store.update(
         SENDER,
@@ -147,6 +145,7 @@ def test_back_button_from_second_screen_returns_to_language_without_greeting(
         IncomingMessage(
             sender=SENDER,
             message_type="interactive",
+            interactive_type="list_reply",
             selection_id="nav_back",
         )
     )
@@ -159,4 +158,33 @@ def test_back_button_from_second_screen_returns_to_language_without_greeting(
         "lang_en", "lang_es",
     ]
     assert "Welcome" not in sent[0][1]["body_text"]
+    assert "Ramon" not in sent[0][1]["body_text"]
+
+
+def test_menu_row_in_sort_list_restarts_without_repeating_greeting(monkeypatch):
+    whatsapp_handler.conversation_store.clear()
+    whatsapp_handler.conversation_store.update(
+        SENDER,
+        state=ConversationState.WAITING_SORT,
+        profile_name="Ramon",
+        language="es",
+        fuel_type="premium",
+    )
+    sent = capture_sent_prompts(monkeypatch)
+
+    whatsapp_handler.handle_interactive_message(
+        IncomingMessage(
+            sender=SENDER,
+            message_type="interactive",
+            interactive_type="list_reply",
+            selection_id="nav_menu",
+        )
+    )
+    assert whatsapp_handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_LANGUAGE
+    )
+    assert len(sent) == 1
+    assert [button["id"] for button in sent[0][1]["buttons"]] == [
+        "lang_en", "lang_es",
+    ]
     assert "Ramon" not in sent[0][1]["body_text"]

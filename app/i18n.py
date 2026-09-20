@@ -51,6 +51,10 @@ TRANSLATIONS = {
         "button_fuel_regular": "⛽ Regular",
         "button_fuel_premium": "✨ Premium",
         "button_fuel_diesel": "🚛 Diesel",
+        "fuel_list_button": "Choose fuel",
+        "fuel_list_section": "Fuel and navigation",
+        "sort_list_button": "Choose order",
+        "sort_list_section": "Sort and navigation",
 
         "fuel_selected": (
             "Perfect! 👍 You selected {fuel}."
@@ -240,6 +244,10 @@ TRANSLATIONS = {
         "button_fuel_regular": "⛽ Regular",
         "button_fuel_premium": "✨ Premium",
         "button_fuel_diesel": "🚛 Diésel",
+        "fuel_list_button": "Elegir combustible",
+        "fuel_list_section": "Combustible y navegación",
+        "sort_list_button": "Elegir orden",
+        "sort_list_section": "Orden y navegación",
 
         "fuel_selected": (
             "¡Perfecto! 👍 Elegiste {fuel}."

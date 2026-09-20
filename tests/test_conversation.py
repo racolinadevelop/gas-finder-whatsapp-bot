@@ -116,7 +116,7 @@ def test_distance_only_request_still_asks_for_fuel(monkeypatch):
     whatsapp_handler.conversation_store.clear()
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -131,10 +131,12 @@ def test_distance_only_request_still_asks_for_fuel(monkeypatch):
     session = whatsapp_handler.conversation_store.get(sender)
     assert session.state == ConversationState.WAITING_FUEL
     assert session.max_distance_miles == 3
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
+    assert [button["id"] for button in sent_messages[0]["rows"]] == [
         "fuel_regular",
         "fuel_premium",
         "fuel_diesel",
+        "nav_back",
+        "nav_menu",
     ]
 
     whatsapp_handler.conversation_store.clear()
@@ -152,7 +154,7 @@ def test_distance_only_while_waiting_for_sort_preserves_step(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -167,10 +169,12 @@ def test_distance_only_while_waiting_for_sort_preserves_step(monkeypatch):
     session = whatsapp_handler.conversation_store.get(sender)
     assert session.state == ConversationState.WAITING_SORT
     assert session.max_distance_miles == 2
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
+    assert [button["id"] for button in sent_messages[0]["rows"]] == [
         "sort_distance",
         "sort_price",
         "sort_best",
+        "nav_back",
+        "nav_menu",
     ]
 
     whatsapp_handler.conversation_store.clear()
@@ -329,7 +333,7 @@ def test_text_while_waiting_for_fuel_repeats_fuel_prompt(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -341,10 +345,12 @@ def test_text_while_waiting_for_fuel_repeats_fuel_prompt(monkeypatch):
         )
     )
 
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
+    assert [button["id"] for button in sent_messages[0]["rows"]] == [
         "fuel_regular",
         "fuel_premium",
         "fuel_diesel",
+        "nav_back",
+        "nav_menu",
     ]
     assert "no corresponde" in sent_messages[0]["body_text"].lower()
     assert whatsapp_handler.conversation_store.get(sender).state == (
@@ -365,7 +371,7 @@ def test_location_while_waiting_for_sort_does_not_search(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -388,10 +394,12 @@ def test_location_while_waiting_for_sort_does_not_search(monkeypatch):
         )
     )
 
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
+    assert [button["id"] for button in sent_messages[0]["rows"]] == [
         "sort_distance",
         "sort_price",
         "sort_best",
+        "nav_back",
+        "nav_menu",
     ]
     assert whatsapp_handler.conversation_store.get(sender).state == (
         ConversationState.WAITING_SORT
@@ -506,6 +514,8 @@ def test_back_command_moves_back_and_preserves_preferences(monkeypatch):
         "distance_5",
         "distance_10",
         "distance_custom",
+        "nav_back",
+        "nav_menu",
     ]
 
     whatsapp_handler.conversation_store.clear()
@@ -563,7 +573,7 @@ def test_interactive_back_button_moves_from_sort_to_fuel(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -580,10 +590,12 @@ def test_interactive_back_button_moves_from_sort_to_fuel(monkeypatch):
     assert whatsapp_handler.conversation_store.get(sender).state == (
         ConversationState.WAITING_FUEL
     )
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
+    assert [button["id"] for button in sent_messages[0]["rows"]] == [
         "fuel_regular",
         "fuel_premium",
         "fuel_diesel",
+        "nav_back",
+        "nav_menu",
     ]
 
     whatsapp_handler.conversation_store.clear()

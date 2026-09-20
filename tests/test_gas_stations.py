@@ -1232,12 +1232,12 @@ def test_whatsapp_button_flow(monkeypatch):
         sort="best",
     )
 
-    assert [button["id"] for button in sent_button_messages[1]["buttons"]] == [
-        "nav_back", "nav_menu",
+    assert [row["id"] for row in sent_list_messages[0]["rows"]] == [
+        "fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu",
     ]
-    assert sent_button_messages[2]["buttons"][0]["id"] == "sort_distance"
-    assert sent_button_messages[2]["buttons"][1]["id"] == "sort_price"
-    assert sent_button_messages[2]["buttons"][2]["id"] == "sort_best"
+    assert [row["id"] for row in sent_list_messages[1]["rows"]] == [
+        "sort_distance", "sort_price", "sort_best", "nav_back", "nav_menu",
+    ]
 
     cheapest_payload = {
         "entry": [
@@ -1281,12 +1281,14 @@ def test_whatsapp_button_flow(monkeypatch):
         sort="price",
     )
 
-    assert [row["id"] for row in sent_list_messages[0]["rows"]] == [
+    assert [row["id"] for row in sent_list_messages[2]["rows"]] == [
         "distance_1",
         "distance_3",
         "distance_5",
         "distance_10",
         "distance_custom",
+        "nav_back",
+        "nav_menu",
     ]
 
     distance_payload = {
@@ -1466,10 +1468,10 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
     )
 
     assert "¿qué tipo de combustible necesitas?" in (
-        sent_button_messages[0]["body_text"]
+        sent_list_messages[0]["body_text"]
     )
 
-    assert sent_button_messages[0]["buttons"][2]["title"] == "🚛 Diésel"
+    assert sent_list_messages[0]["rows"][2]["title"] == "🚛 Diésel"
 
     # 2. Select Diesel
     diesel_payload = {
@@ -1514,12 +1516,12 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         sort="best",
     )
 
-    assert [button["id"] for button in sent_button_messages[1]["buttons"]] == [
+    assert [row["id"] for row in sent_list_messages[0]["rows"]][-2:] == [
         "nav_back", "nav_menu",
     ]
-    assert sent_button_messages[2]["buttons"][0]["title"] == "📍 Más cerca"
-    assert sent_button_messages[2]["buttons"][1]["title"] == "💵 Más barato"
-    assert sent_button_messages[2]["buttons"][2]["title"] == "⭐ Mejor opción"
+    assert sent_list_messages[1]["rows"][0]["title"] == "📍 Más cerca"
+    assert sent_list_messages[1]["rows"][1]["title"] == "💵 Más barato"
+    assert sent_list_messages[1]["rows"][2]["title"] == "⭐ Mejor opción"
 
     # 3. Select Cheapest
     cheapest_payload = {
@@ -1564,7 +1566,10 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         sort="price",
     )
 
-    assert sent_list_messages[0]["button_text"] == "Elegir distancia"
+    assert sent_list_messages[2]["button_text"] == "Elegir distancia"
+    assert [row["id"] for row in sent_list_messages[2]["rows"]][-2:] == [
+        "nav_back", "nav_menu",
+    ]
 
     distance_payload = {
         "entry": [

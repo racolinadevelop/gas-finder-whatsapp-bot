@@ -26,7 +26,6 @@ from app.presentation import (
     build_fuel_prompt,
     build_language_prompt,
     build_location_prompt,
-    build_navigation_prompt,
     build_results_navigation_prompt,
     build_sort_prompt,
     build_state_prompt,
@@ -84,23 +83,6 @@ def send_prompt(sender: str, prompt: Prompt) -> None:
         elif isinstance(prompt, TextPrompt):
             send_text_message(to=sender, message=prompt.message)
 
-        # WhatsApp allows only three reply buttons per message. Keep the
-        # existing fuel/sort choices and offer Back/Menu in a second message.
-        # The initial language choice has no navigation; the final-results
-        # prompt already contains these two buttons.
-        session = conversation_store.get(sender)
-        if (
-            session is not None
-            and session.state
-            not in {ConversationState.NEW, ConversationState.WAITING_LANGUAGE,
-                    ConversationState.WAITING_RESULTS}
-        ):
-            navigation = build_navigation_prompt(session.language)
-            send_reply_buttons(
-                to=sender,
-                body_text=navigation.body_text,
-                buttons=navigation.buttons,
-            )
     except WhatsAppServiceError as exc:
         logger.warning("Could not send conversation prompt: %s", exc)
 
