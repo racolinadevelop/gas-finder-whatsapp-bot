@@ -94,7 +94,7 @@ def test_search_without_preferences_starts_guided_flow(monkeypatch):
     whatsapp_handler.conversation_store.clear()
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -109,10 +109,10 @@ def test_search_without_preferences_starts_guided_flow(monkeypatch):
     session = whatsapp_handler.conversation_store.get(sender)
     assert session.state == ConversationState.WAITING_FUEL
     assert session.language == "es"
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
+    assert [row["id"] for row in sent_messages[0]["rows"]] == [
         "fuel_regular",
         "fuel_premium",
-        "fuel_diesel",
+        "fuel_diesel", "nav_back", "nav_menu",
     ]
 
     whatsapp_handler.conversation_store.clear()
@@ -157,7 +157,7 @@ def test_fuel_text_advances_expected_fuel_step(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -168,7 +168,7 @@ def test_fuel_text_advances_expected_fuel_step(monkeypatch):
     session = whatsapp_handler.conversation_store.get(sender)
     assert session.state == ConversationState.WAITING_SORT
     assert session.fuel_type == "diesel"
-    assert sent_messages[0]["buttons"][0]["id"] == "sort_distance"
+    assert sent_messages[0]["rows"][0]["id"] == "sort_distance"
 
     whatsapp_handler.conversation_store.clear()
 

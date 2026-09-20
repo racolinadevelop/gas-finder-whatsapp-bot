@@ -54,7 +54,7 @@ def test_session_is_preserved_after_result_and_navigation_is_offered(monkeypatch
         assert whatsapp_handler.conversation_store.get(sender).state == (
             ConversationState.WAITING_RESULTS
         )
-        assert [button["id"] for button in kwargs["buttons"]] == [
+        assert [row["id"] for row in kwargs["rows"]] == [
             "nav_back",
             "nav_menu",
         ]
@@ -67,7 +67,7 @@ def test_session_is_preserved_after_result_and_navigation_is_offered(monkeypatch
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         send_actions,
     )
 

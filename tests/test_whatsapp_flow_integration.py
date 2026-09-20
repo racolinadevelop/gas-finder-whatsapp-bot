@@ -87,6 +87,11 @@ class WhatsAppHarness:
         assert kind == "buttons"
         assert [item["id"] for item in payload["buttons"]] == expected
 
+    def assert_last_list(self, expected):
+        kind, payload = self.sent[-1]
+        assert kind == "list"
+        assert [item["id"] for item in payload["rows"]] == expected
+
 
 @pytest.fixture
 def bot(monkeypatch):
@@ -127,23 +132,24 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     bot.sent.clear()
 
     bot.button("lang_es")
-    bot.assert_sent("buttons", "buttons")
-    assert [button["id"] for button in bot.sent[0][1]["buttons"]] == [
-        "fuel_regular", "fuel_premium", "fuel_diesel",
-    ]
-    bot.assert_last_buttons(["nav_back", "nav_menu"])
+    bot.assert_sent("list")
+    bot.assert_last_list(["fuel_regular", "fuel_premium", "fuel_diesel",
+                          "nav_back", "nav_menu"])
+    assert bot.sent[0][1]["button_text"] == "Elegir combustible"
     bot.sent.clear()
 
-    bot.button("fuel_premium")
-    bot.assert_sent("buttons", "buttons")
-    assert [button["id"] for button in bot.sent[0][1]["buttons"]] == [
-        "sort_distance", "sort_price", "sort_best",
-    ]
+    bot.button("fuel_premium", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list(["sort_distance", "sort_price", "sort_best",
+                          "nav_back", "nav_menu"])
+    assert bot.sent[0][1]["button_text"] == "Elegir categoría"
     bot.sent.clear()
 
-    bot.button("sort_price")
-    bot.assert_sent("list", "buttons")
-    bot.assert_last_buttons(["nav_back", "nav_menu"])
+    bot.button("sort_price", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list(["distance_1", "distance_3", "distance_5",
+                          "distance_10", "distance_custom",
+                          "nav_back", "nav_menu"])
     bot.sent.clear()
 
     bot.button("distance_3", kind="list_reply")
@@ -153,15 +159,15 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
         "es", "premium", "price",
     )
     assert session.max_distance_miles == 3
-    bot.assert_sent("text", "buttons")
-    bot.assert_last_buttons(["nav_back", "nav_menu"])
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["nav_back", "nav_menu"])
     bot.sent.clear()
 
     # Unrelated text must not replace the selected fuel, sort or radius.
     bot.text("unrelated")
     assert handler.conversation_store.get(SENDER) == session
     assert bot.searches == []
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     bot.sent.clear()
 
     bot.location(message_id="wamid.integration.first-location")
@@ -169,9 +175,9 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     assert bot.searches[0] == {
         "session": session, "latitude": 38.25, "longitude": -85.75,
     }
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     assert bot.sent[0][1]["message"] == "STATION_RESULTS"
-    bot.assert_last_buttons(["nav_back", "nav_menu"])
+    bot.assert_last_list(["nav_back", "nav_menu"])
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_RESULTS
     )
@@ -182,11 +188,11 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     assert len(bot.searches) == 1
     assert bot.sent == []
 
-    bot.button("nav_back")
+    bot.button("nav_back", kind="list_reply")
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_LOCATION
     )
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     bot.sent.clear()
 
     bot.location(message_id="wamid.integration.second-location")
@@ -196,7 +202,7 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     )
     bot.sent.clear()
 
-    bot.button("nav_menu")
+    bot.button("nav_menu", kind="list_reply")
     reset = handler.conversation_store.get(SENDER)
     assert reset.state == ConversationState.WAITING_LANGUAGE
     assert reset.profile_name == "Alex"
@@ -209,8 +215,8 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
 def test_english_custom_distance_stale_buttons_and_provider_error(bot):
     bot.text("hello")
     bot.button("lang_en")
-    bot.button("fuel_regular")
-    bot.button("sort_best")
+    bot.button("fuel_regular", kind="list_reply")
+    bot.button("sort_best", kind="list_reply")
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_DISTANCE
     )
@@ -222,34 +228,34 @@ def test_english_custom_distance_stale_buttons_and_provider_error(bot):
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_DISTANCE
     )
-    bot.assert_sent("list", "buttons")
+    bot.assert_sent("list")
     bot.sent.clear()
 
     bot.button("distance_custom", kind="list_reply")
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_CUSTOM_DISTANCE
     )
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     bot.sent.clear()
 
     bot.text("invalid distance")
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_CUSTOM_DISTANCE
     )
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     bot.sent.clear()
 
     bot.text("2.5")
     original = handler.conversation_store.get(SENDER)
     assert original.state == ConversationState.WAITING_LOCATION
     assert original.max_distance_miles == 2.5
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     bot.sent.clear()
 
     # Old buttons cannot change the language or skip a pending location.
     bot.button("lang_es")
     assert handler.conversation_store.get(SENDER) == original
-    bot.assert_sent("text", "buttons")
+    bot.assert_sent("text", "list")
     bot.sent.clear()
 
     bot.search_error = True
@@ -266,8 +272,8 @@ def test_english_custom_distance_stale_buttons_and_provider_error(bot):
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_RESULTS
     )
-    bot.assert_sent("text", "buttons")
-    bot.assert_last_buttons(["nav_back", "nav_menu"])
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["nav_back", "nav_menu"])
     bot.sent.clear()
 
     # An unsupported message at results must not start a second search.
@@ -276,8 +282,8 @@ def test_english_custom_distance_stale_buttons_and_provider_error(bot):
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_RESULTS
     )
-    bot.assert_sent("buttons")
-    bot.assert_last_buttons(["nav_back", "nav_menu"])
+    bot.assert_sent("list")
+    bot.assert_last_list(["nav_back", "nav_menu"])
 
 
 def test_status_only_webhook_has_no_conversation_side_effects(bot):

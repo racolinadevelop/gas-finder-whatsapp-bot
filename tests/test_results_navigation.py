@@ -98,13 +98,13 @@ def test_menu_button_after_results_starts_over_without_repeating_greeting(
         ("text", {"text": "ok"}),
     ],
 )
-def test_unexpected_result_message_shows_navigation_buttons(
+def test_unexpected_result_message_shows_navigation_list(
     monkeypatch, message_type, kwargs
 ):
     original = completed_search()
     sent = []
     monkeypatch.setattr(
-        whatsapp_handler, "send_reply_buttons",
+        whatsapp_handler, "send_list_message",
         lambda **payload: sent.append(payload),
     )
     message = IncomingMessage(sender=SENDER, message_type=message_type, **kwargs)
@@ -115,12 +115,12 @@ def test_unexpected_result_message_shows_navigation_buttons(
         whatsapp_handler.handle_text_message(message)
 
     assert whatsapp_handler.conversation_store.get(SENDER) == original
-    assert [button["id"] for button in sent[0]["buttons"]] == [
+    assert [row["id"] for row in sent[0]["rows"]] == [
         "nav_back", "nav_menu",
     ]
 
 
-def test_failure_to_send_result_buttons_keeps_navigation_state(monkeypatch):
+def test_failure_to_send_result_navigation_keeps_navigation_state(monkeypatch):
     whatsapp_handler.conversation_store.clear()
     whatsapp_handler.conversation_store.update(
         SENDER,
@@ -146,7 +146,7 @@ def test_failure_to_send_result_buttons_keeps_navigation_state(monkeypatch):
         raise WhatsAppServiceError("temporary error")
 
     monkeypatch.setattr(
-        whatsapp_handler, "send_reply_buttons", failed_buttons
+        whatsapp_handler, "send_list_message", failed_buttons
     )
     whatsapp_handler.handle_location_message(
         IncomingMessage(
