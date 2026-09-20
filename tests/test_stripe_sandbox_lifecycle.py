@@ -248,10 +248,11 @@ def test_signed_unlinked_or_unpaid_checkout_cannot_grant_premium(sandbox):
     assert not ledger.has_premium_access(USER)
     gateway.checkout["client_reference_id"] = user_hash(USER)
     gateway.subscription["items"]["data"][0]["price"]["id"] = "price_other"
-    assert send_event(client, "evt_wrong_price").status_code == 503
+    assert send_event(client, "evt_wrong_price").json()["applied"] is True
     assert not ledger.has_premium_access(USER)
     gateway.subscription["items"]["data"][0]["price"]["id"] = PRICE
-    assert send_event(client, "evt_wrong_price").json()["applied"] is True
+    assert send_event(client, "evt_correct_price").json()["applied"] is True
+    assert ledger.has_premium_access(USER)
 
 
 def test_out_of_order_invoice_and_failed_payment_revoke_then_renew(sandbox):
