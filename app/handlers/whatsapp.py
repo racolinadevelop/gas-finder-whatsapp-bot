@@ -106,6 +106,18 @@ def load_saved_language(sender: str) -> str | None:
         if profile is not None and profile.language in {"es", "en"}:
             user_language_store.save(sender, profile.language)
             return profile.language
+        # Existing users may have selected a language but not completed a
+        # search yet. Migrate an already advanced conversation as well.
+        current = conversation_store.get(sender)
+        if (
+            current is not None
+            and current.state not in {
+                ConversationState.NEW, ConversationState.WAITING_LANGUAGE,
+            }
+            and current.language in {"es", "en"}
+        ):
+            user_language_store.save(sender, current.language)
+            return current.language
     except Exception:
         logger.warning("Could not retrieve saved language preference")
     return None
