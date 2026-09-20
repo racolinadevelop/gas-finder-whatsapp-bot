@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from app.conversation import ConversationSession
 from app.models import IncomingMessage
+from app.preferences import SearchPreferences
 
 
 def process_location_message(
@@ -13,6 +14,7 @@ def process_location_message(
     search_from_location: Callable[[IncomingMessage, ConversationSession], None],
     dispatch_state_location: Callable[[IncomingMessage, ConversationSession], bool],
     send_expected: Callable[[str, ConversationSession], None],
+    load_preferences: Callable[[str], SearchPreferences | None] = lambda sender: None,
 ) -> None:
     """Keep missing-coordinate and unexpected-state behavior unchanged."""
     if (
@@ -26,7 +28,18 @@ def process_location_message(
 
     # Preserve the existing direct-location search for first-time users.
     if session is None:
-        search_from_location(incoming_message, ConversationSession(sender=sender))
+        preferences = load_preferences(sender)
+        initial = (
+            ConversationSession(
+                sender=sender,
+                language=preferences.language,
+                fuel_type=preferences.fuel_type,
+                sort=preferences.sort,
+                max_distance_miles=preferences.max_distance_miles,
+            )
+            if preferences is not None else ConversationSession(sender=sender)
+        )
+        search_from_location(incoming_message, initial)
         return
 
     if not dispatch_state_location(incoming_message, session):
