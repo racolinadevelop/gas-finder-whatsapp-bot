@@ -6,10 +6,10 @@ from app.conversation import (
     ConversationTransitions,
     NavigationAction,
     SearchFlowDecision,
-    parse_navigation_action,
 )
 from app.conversation.options import LANGUAGE_BUTTONS
 from app.handlers.conversation_states import ConversationStateHandlers
+from app.handlers.interactive_messages import process_interactive_message
 from app.handlers.location_results import run_location_search
 from app.handlers.search_flow_delivery import deliver_search_flow_decision
 from app.handlers.text_messages import GREETINGS, process_text_message
@@ -182,33 +182,15 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
     )
 
 def handle_interactive_message(incoming_message: IncomingMessage) -> None:
-    sender = incoming_message.sender
-    button_id = incoming_message.selection_id or ""
-    navigation_action = parse_navigation_action(button_id)
-
-    if navigation_action is not None:
-        handle_navigation(sender, navigation_action)
-        return
-
-    session = conversation_transitions.ensure_started(sender)
-
-    if button_id in LANGUAGE_BUTTONS:
-        # Old interactive messages can still be tapped in WhatsApp.
-        # Accept a language choice only at the language-selection step.
-        if session.state != ConversationState.WAITING_LANGUAGE:
-            send_expected_prompt(sender, session)
-            return
-
-        conversation_state_handlers.language_selection(
-            sender,
-            LANGUAGE_BUTTONS[button_id],
-            display_name=incoming_message.profile_name,
-        )
-        return
-
-    if not interactive_state_router.dispatch(incoming_message, session):
-        send_expected_prompt(sender, session)
-
+    process_interactive_message(
+        incoming_message,
+        navigate=handle_navigation,
+        ensure_started=conversation_transitions.ensure_started,
+        language_buttons=LANGUAGE_BUTTONS,
+        select_language=conversation_state_handlers.language_selection,
+        dispatch_state_interactive=interactive_state_router.dispatch,
+        send_expected=send_expected_prompt,
+    )
 
 def search_from_location(
     incoming_message: IncomingMessage,
