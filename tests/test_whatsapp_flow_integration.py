@@ -174,6 +174,7 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     assert len(bot.searches) == 1
     assert bot.searches[0] == {
         "session": session, "latitude": 38.25, "longitude": -85.75,
+        "capture_results": True,
     }
     bot.assert_sent("text", "list")
     assert bot.sent[0][1]["message"] == "STATION_RESULTS"
@@ -330,8 +331,8 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
         ConversationState.WAITING_LANGUAGE
     )
     bot.assert_sent("buttons", "text")
-    assert "Premium (Stripe test)" in bot.sent[-1][1]["message"]
-    assert "Premium (prueba de Stripe)" in bot.sent[-1][1]["message"]
+    assert "Premium (test)" in bot.sent[-1][1]["message"]
+    assert "Premium (prueba)" in bot.sent[-1][1]["message"]
 
     bot.sent.clear()
     bot.button("lang_es")
@@ -362,3 +363,132 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_RESULTS
     )
+
+
+def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeypatch):
+    from app.favorites import InMemoryFavoriteStore, SearchReply, shown_stations
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    class VerifiedTestLedger:
+        active = True
+
+        def has_premium_access(self, sender):
+            assert sender == SENDER
+            return self.active
+
+    ledger = VerifiedTestLedger()
+    store = InMemoryFavoriteStore()
+    monkeypatch.setattr(handler, "favorites_store", store)
+    monkeypatch.setattr(
+        handler, "subscription_service",
+        SubscriptionService(InMemorySubscriptionStore(), test_entitlements=ledger),
+    )
+
+    stations = shown_stations([{
+        "id": "place-id-123", "name": "Example Station",
+        "address": "123 Main St", "latitude": 38.25,
+        "longitude": -85.75, "selected_fuel": {"price": 3.40},
+    }])
+    searches = []
+    def one_search(**kwargs):
+        searches.append(kwargs)
+        return SearchReply("STATION_RESULTS", stations)
+
+    monkeypatch.setattr(handler.location_search_service, "search", one_search)
+
+    bot.text("hola")
+    bot.button("lang_es")
+    bot.button("fuel_regular", kind="list_reply")
+    bot.button("sort_price", kind="list_reply")
+    bot.button("distance_3", kind="list_reply")
+    bot.sent.clear()
+
+    bot.location()
+    assert len(searches) == 1
+    assert searches[0]["capture_results"] is True
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["fav_save_1", "fav_list", "nav_back", "nav_menu"])
+    original = handler.conversation_store.get(SENDER)
+
+    bot.sent.clear()
+    bot.button("fav_save_1", kind="list_reply")
+    bot.assert_sent("text")
+    assert "Guardada" in bot.sent[0][1]["message"]
+    assert "Example Station" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER) == original
+    assert len(searches) == 1
+
+    bot.sent.clear()
+    bot.text("mis favoritas")
+    bot.assert_sent("text")
+    assert "123 Main St" in bot.sent[0][1]["message"]
+    assert store.list_favorites(SENDER) == stations
+
+    # A canceled payment must block both reads and mutations immediately.
+    ledger.active = False
+    bot.sent.clear()
+    bot.text("mis favoritas")
+    bot.assert_sent("text")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert "123 Main St" not in bot.sent[0][1]["message"]
+
+    bot.sent.clear()
+    bot.button("fav_save_1", kind="list_reply")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert store.list_favorites(SENDER) == stations
+
+    bot.sent.clear()
+    bot.text("eliminar favorita 1")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert store.list_favorites(SENDER) == stations
+
+    # Standard gas-station search remains free, without favorite actions.
+    bot.sent.clear()
+    bot.button("nav_back", kind="list_reply")
+    bot.sent.clear()
+    bot.location()
+    assert len(searches) == 2
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["nav_back", "nav_menu"])
+
+    # If the tested entitlement becomes active again, saved favorites return.
+    ledger.active = True
+    bot.sent.clear()
+    bot.text("mis favoritas")
+    assert "Example Station" in bot.sent[0][1]["message"]
+    bot.sent.clear()
+    bot.text("eliminar favorita 1")
+    assert "Eliminada" in bot.sent[0][1]["message"]
+    assert store.list_favorites(SENDER) == ()
+
+
+def test_favorite_remove_is_not_replayed_if_whatsapp_acknowledgement_fails(
+    bot, monkeypatch,
+):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.services.whatsapp import WhatsAppServiceError
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    store = InMemoryFavoriteStore()
+    store.record_results(SENDER, shown_stations([
+        {"id": "a", "name": "Station A", "address": "A Street"},
+        {"id": "b", "name": "Station B", "address": "B Street"},
+    ]))
+    store.add_from_recent(SENDER, 1)
+    store.add_from_recent(SENDER, 2)
+    monkeypatch.setattr(handler, "favorites_store", store)
+    subscriptions = SubscriptionService(InMemorySubscriptionStore())
+    subscriptions.activate_premium(SENDER)
+    monkeypatch.setattr(handler, "subscription_service", subscriptions)
+    monkeypatch.setattr(
+        handler, "send_text_message",
+        lambda **kwargs: (_ for _ in ()).throw(
+            WhatsAppServiceError("simulated delivery failure")
+        ),
+    )
+    message = {"type": "text", "text": {"body": "eliminar favorita 1"}}
+    bot.post(message, message_id="wamid.favorite-remove-once")
+    assert [item.name for item in store.list_favorites(SENDER)] == ["Station B"]
+    # Meta retry of the same message must never delete a second item.
+    bot.post(message, message_id="wamid.favorite-remove-once")
+    assert [item.name for item in store.list_favorites(SENDER)] == ["Station B"]

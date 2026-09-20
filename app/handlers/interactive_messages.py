@@ -9,6 +9,7 @@ from app.conversation import (
     parse_navigation_action,
 )
 from app.models import IncomingMessage
+from app.favorites.commands import parse_favorite_action
 from app.handlers.plan_messages import PLAN_SELECTION_ID
 
 
@@ -22,6 +23,7 @@ def process_interactive_message(
     dispatch_state_interactive: Callable[[IncomingMessage, ConversationSession], bool],
     send_expected: Callable[[str, ConversationSession], None],
     show_plan: Callable[[str], None] | None = None,
+    show_favorite: Callable[[str, str, int | None], None] | None = None,
 ) -> None:
     """Prioritize global navigation and reject stale language buttons."""
     sender = incoming_message.sender
@@ -34,6 +36,11 @@ def process_interactive_message(
 
     if button_id == PLAN_SELECTION_ID and show_plan is not None:
         show_plan(sender)
+        return
+
+    favorite_action = parse_favorite_action(selection_id=button_id)
+    if show_favorite is not None and favorite_action is not None:
+        show_favorite(sender, *favorite_action)
         return
 
     session = ensure_started(sender)

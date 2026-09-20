@@ -8,10 +8,12 @@ import logging
 from collections.abc import Callable
 
 from app.conversation import ConversationSession, ConversationState
+from app.favorites.models import FavoriteStation, SearchReply
 from app.i18n import t
 from app.models import IncomingMessage
 from app.preferences import SearchPreferences
 from app.presentation import Prompt, build_results_navigation_prompt
+from app.presentation.prompts import build_favorites_result_navigation_prompt
 from app.providers import GasStationProviderError
 from app.services.whatsapp import WhatsAppServiceError
 
@@ -23,13 +25,14 @@ def run_location_search(
     session: ConversationSession,
     *,
     allow_search: Callable[[str], bool],
-    search: Callable[..., str],
+    search: Callable[..., str | SearchReply],
     send_text: Callable[..., dict],
     update_session: Callable[..., ConversationSession],
     send_prompt: Callable[[str, Prompt], None],
     save_preferences: Callable[[str, SearchPreferences], None] = (
         lambda sender, preferences: None
     ),
+    save_recent: Callable[[str, tuple[FavoriteStation, ...]], bool] | None = None,
 ) -> None:
     """Search and show results while retaining preferences for Back/Menu."""
     sender = incoming_message.sender
@@ -66,8 +69,11 @@ def run_location_search(
             logger.warning("Unable to send search error reply: %s", send_exc)
         return
 
+    # The original search returns text; optional Premium captures station
+    # snapshots from that same search, without calling a provider twice.
+    reply_text = reply.text if isinstance(reply, SearchReply) else reply
     try:
-        send_text(to=sender, message=reply)
+        send_text(to=sender, message=reply_text)
     except WhatsAppServiceError as exc:
         logger.warning("Unable to send WhatsApp reply: %s", exc)
         return
@@ -78,4 +84,18 @@ def run_location_search(
     if session.state == ConversationState.WAITING_LOCATION:
         # Only completed guided searches update the separate user profile.
         save_preferences(sender, SearchPreferences.from_session(session))
-    send_prompt(sender, build_results_navigation_prompt(session.language))
+    favorites_ready = False
+    if isinstance(reply, SearchReply) and save_recent is not None:
+        try:
+            favorites_ready = save_recent(sender, reply.stations)
+        except Exception:
+            logger.warning("Unable to store recent favorite choices")
+    if favorites_ready and reply.stations:
+        send_prompt(
+            sender,
+            build_favorites_result_navigation_prompt(
+                session.language, len(reply.stations)
+            ),
+        )
+    else:
+        send_prompt(sender, build_results_navigation_prompt(session.language))

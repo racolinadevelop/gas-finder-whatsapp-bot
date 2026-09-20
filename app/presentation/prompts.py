@@ -282,6 +282,32 @@ def build_results_navigation_prompt(language: str) -> ReplyButtonsPrompt:
     )
 
 
+def build_favorites_result_navigation_prompt(language: str, count: int) -> ListPrompt:
+    """Premium-only choices for the five displayed results; Back/Menu included by delivery."""
+    language = language if language in {"es", "en"} else "en"
+    rows = [
+        {
+            "id": f"fav_save_{index}",
+            "title": f"⭐ {'Guardar' if language == 'es' else 'Save'} {index}",
+        }
+        for index in range(1, min(max(count, 0), 5) + 1)
+    ]
+    rows.append({
+        "id": "fav_list",
+        "title": "⭐ Mis favoritas" if language == "es" else "⭐ My favorites",
+    })
+    return ListPrompt(
+        body_text=(
+            "⭐ ¿Quieres guardar una de estas gasolineras?"
+            if language == "es"
+            else "⭐ Want to save one of these gas stations?"
+        ),
+        button_text="Opciones" if language == "es" else "Options",
+        section_title="Favoritas y navegación" if language == "es" else "Favorites and navigation",
+        rows=rows,
+    )
+
+
 def build_state_prompt(
     session: ConversationSession,
     error: bool = False,
