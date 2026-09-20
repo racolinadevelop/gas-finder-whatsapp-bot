@@ -460,3 +460,35 @@ def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeyp
     bot.text("eliminar favorita 1")
     assert "Eliminada" in bot.sent[0][1]["message"]
     assert store.list_favorites(SENDER) == ()
+
+
+def test_favorite_remove_is_not_replayed_if_whatsapp_acknowledgement_fails(
+    bot, monkeypatch,
+):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.services.whatsapp import WhatsAppServiceError
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    store = InMemoryFavoriteStore()
+    store.record_results(SENDER, shown_stations([
+        {"id": "a", "name": "Station A", "address": "A Street"},
+        {"id": "b", "name": "Station B", "address": "B Street"},
+    ]))
+    store.add_from_recent(SENDER, 1)
+    store.add_from_recent(SENDER, 2)
+    monkeypatch.setattr(handler, "favorites_store", store)
+    subscriptions = SubscriptionService(InMemorySubscriptionStore())
+    subscriptions.activate_premium(SENDER)
+    monkeypatch.setattr(handler, "subscription_service", subscriptions)
+    monkeypatch.setattr(
+        handler, "send_text_message",
+        lambda **kwargs: (_ for _ in ()).throw(
+            WhatsAppServiceError("simulated delivery failure")
+        ),
+    )
+    message = {"type": "text", "text": {"body": "eliminar favorita 1"}}
+    bot.post(message, message_id="wamid.favorite-remove-once")
+    assert [item.name for item in store.list_favorites(SENDER)] == ["Station B"]
+    # Meta retry of the same message must never delete a second item.
+    bot.post(message, message_id="wamid.favorite-remove-once")
+    assert [item.name for item in store.list_favorites(SENDER)] == ["Station B"]
