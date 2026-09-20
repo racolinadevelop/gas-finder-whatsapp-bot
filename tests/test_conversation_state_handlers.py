@@ -19,7 +19,7 @@ def build_handlers():
     return store, sent, handlers
 
 
-def test_language_selection_personalizes_welcome():
+def test_language_selection_shows_fuel_options_without_repeating_greeting():
     store, sent, handlers = build_handlers()
 
     handlers.language_selection(
@@ -30,7 +30,9 @@ def test_language_selection_personalizes_welcome():
 
     assert store.get("sender").state == ConversationState.WAITING_FUEL
     assert isinstance(sent[0][1], ReplyButtonsPrompt)
-    assert "¡Hola, Ramon!" in sent[0][1].body_text
+    assert "¡Hola, Ramon!" not in sent[0][1].body_text
+    assert "Para comenzar" in sent[0][1].body_text
+    assert store.get("sender").profile_name == "Ramon"
 
 
 def test_distance_text_converts_kilometers_and_requests_location():

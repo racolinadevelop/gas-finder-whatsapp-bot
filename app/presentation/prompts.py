@@ -58,16 +58,19 @@ SORT_NAMES = {
 def build_language_prompt(
     error: bool = False,
     display_name: str | None = None,
+    greeting: bool = True,
 ) -> ReplyButtonsPrompt:
     if error:
         body_text = t("en", "invalid_language")
+    elif not greeting:
+        body_text = t("en", "choose_language_again")
     elif display_name:
         body_text = t("en", "choose_language_named", name=display_name)
     else:
         body_text = t("en", "choose_language")
 
     return ReplyButtonsPrompt(
-        body_text=f"{body_text}\n\n{t('en', 'navigation_hint')}",
+        body_text=body_text,
         buttons=[
             {"id": "lang_en", "title": "English"},
             {"id": "lang_es", "title": "Español"},
@@ -96,7 +99,6 @@ def build_fuel_prompt(
     body_parts.extend(
         [
             t(language, "choose_fuel"),
-            t(language, "navigation_hint"),
         ]
     )
 
@@ -141,7 +143,6 @@ def build_sort_prompt(
     body_parts.extend(
         [
             t(language, "choose_sort"),
-            t(language, "navigation_hint"),
         ]
     )
 
@@ -176,7 +177,6 @@ def build_distance_prompt(
     body_parts.extend(
         [
             t(language, "choose_distance"),
-            t(language, "navigation_hint"),
         ]
     )
 
@@ -230,7 +230,6 @@ def build_custom_distance_prompt(
                 minimum=MIN_DISTANCE_MILES,
                 maximum=MAX_DISTANCE_MILES,
             ),
-            t(language, "navigation_hint"),
         ]
     )
 
@@ -253,8 +252,6 @@ def build_location_prompt(
     else:
         message = t(language, "invalid_location")
 
-    message = f"{message}\n\n{t(language, 'navigation_hint')}"
-
     if session.max_distance_miles is not None:
         message = (
             f"{message}\n\n"
@@ -262,6 +259,16 @@ def build_location_prompt(
         )
 
     return TextPrompt(message=message)
+
+
+def build_navigation_prompt(language: str) -> ReplyButtonsPrompt:
+    return ReplyButtonsPrompt(
+        body_text=t(language, "navigation_buttons_prompt"),
+        buttons=[
+            {"id": "nav_back", "title": t(language, "button_nav_back")},
+            {"id": "nav_menu", "title": t(language, "button_nav_menu")},
+        ],
+    )
 
 
 def build_results_navigation_prompt(language: str) -> ReplyButtonsPrompt:
@@ -285,6 +292,7 @@ def build_state_prompt(
         return build_language_prompt(
             error=error,
             display_name=session.profile_name,
+            greeting=False,
         )
     if session.state == ConversationState.WAITING_FUEL:
         return build_fuel_prompt(session.language, error=error)
