@@ -87,7 +87,7 @@ boundaries, preserved behaviors, automated tests and the live smoke-test checkli
 - Remember completed search settings separately from conversation state, and
   restore them when a returning user sends a location after session expiry
 - Ignore repeated WhatsApp message IDs and rate-limit station searches per user
-- Maintain a centralized Free/Premium subscription and feature-access foundation (billing not yet connected)
+- Maintain a centralized Free/Premium policy and opt-in, linked Stripe TEST sandbox entitlements
 - Keep language interpretation separate from deterministic station lookup
 - Optionally use an OpenAI Structured Outputs fallback for ambiguous messages
 - Send automatic WhatsApp replies
@@ -274,8 +274,9 @@ recommendations are defined as Premium capabilities.
 Subscription records use PostgreSQL when `DATABASE_URL` is configured.
 Without it, local development and tests continue to use in-memory storage.
 The PostgreSQL table is created automatically at startup and stores a SHA-256
-identifier instead of the raw WhatsApp ID. No payment provider or real billing
-is connected yet; Stripe Sandbox can be added behind the same service later.
+identifier instead of the raw WhatsApp ID. A separate opt-in Stripe TEST
+sandbox ledger can grant test-only feature access after a verified paid test
+subscription; regular subscription records and actual billing remain unchanged.
 
 ## Run Locally
 
@@ -557,10 +558,10 @@ PostgreSQL-ready persistent subscription state ✅
 - Station prices and opening hours depend on provider coverage and freshness.
   Unknown hours are not proof that a station is open. HERE does not verify
   real-time open status.
-- Free/Premium policy and storage are present. An opt-in Stripe TEST-only
-  Checkout/portal adapter and signed, observational test webhook are available;
-  payment-to-user binding, event reconciliation and paid feature enforcement
-  are not implemented yet. No real payments are collected by this project.
+- Opt-in Stripe TEST sandbox Checkout/portal and a verified paid subscription
+  lifecycle are testable; hashed user binding and processed-event receipts are
+  stored in a separate PostgreSQL ledger. No live charges or paid user-facing
+  features are enabled. External Stripe sandbox setup requires your test keys.
 - Automated tests mock external Meta/Google/HERE calls. A live WhatsApp
   smoke test is still required after deployment; see
   [Architecture and Refactor Closeout](docs/ARCHITECTURE.md).
@@ -580,11 +581,11 @@ Next product stages, in planned order:
    display intentionally hides update-time and opening-hour labels.
 4. User-level language, fuel, sorting and radius preferences now persist
    separately from the active conversation (implemented).
-5. Stripe TEST-only Checkout/portal transport and signed webhook validation
-   are prepared behind a disabled-by-default flag. Next: persist a verified
-   Checkout-to-user binding, process lifecycle events idempotently, and gate
-   Premium features after confirmed paid status. Never enable live billing
-   before cancellation/renewal and test-mode end-to-end checks.
+5. Stripe TEST-only Checkout/portal, immutable user binding and paid-status
+   reconciliation are implemented behind a disabled-by-default flag. Run
+   simulated tests and an actual Stripe sandbox checkout, renewal/failure and
+   cancellation flow. Next, build authenticated public self-service and harden
+   concurrent webhook reconciliation before any live payment launch.
 6. Add favorites/history and price alerts, assigning appropriate Free/Premium
    access before enabling real charges.
 7. Automate reusable Meta/WhatsApp onboarding and improve production
