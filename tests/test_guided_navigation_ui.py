@@ -72,6 +72,7 @@ def test_first_language_screen_only_has_language_buttons(monkeypatch):
     assert len(sent) == 1
     assert [button["id"] for button in sent[0][1]["buttons"]] == [
         "lang_en", "lang_es",
+    "account_plan",
     ]
     assert sent[0][1]["body_text"].count("Ramon") == 2
 
@@ -138,6 +139,7 @@ def test_back_button_from_second_screen_returns_to_language_without_greeting(
     assert len(sent) == 1
     assert [button["id"] for button in sent[0][1]["buttons"]] == [
         "lang_en", "lang_es",
+    "account_plan",
     ]
     assert "Welcome" not in sent[0][1]["body_text"]
     assert "Ramon" not in sent[0][1]["body_text"]
@@ -215,5 +217,6 @@ def test_menu_from_location_restarts_without_repeating_greeting(monkeypatch):
     assert [kind for kind, _ in sent] == ["buttons"]
     assert [button["id"] for button in sent[0][1]["buttons"]] == [
         "lang_en", "lang_es",
+    "account_plan",
     ]
     assert "Welcome" not in sent[0][1]["body_text"]
