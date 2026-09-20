@@ -128,7 +128,7 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
         ConversationState.WAITING_LANGUAGE
     )
     bot.assert_sent("buttons")
-    bot.assert_last_buttons(["lang_en", "lang_es"])
+    bot.assert_last_buttons(["lang_en", "lang_es", "account_plan"])
     bot.sent.clear()
 
     bot.button("lang_es")
@@ -208,7 +208,7 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     assert reset.profile_name == "Alex"
     assert reset.max_distance_miles is None
     bot.assert_sent("buttons")
-    bot.assert_last_buttons(["lang_en", "lang_es"])
+    bot.assert_last_buttons(["lang_en", "lang_es", "account_plan"])
     assert bot.users and all(sender == SENDER for sender in bot.users)
 
 
