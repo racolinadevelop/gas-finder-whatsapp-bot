@@ -173,6 +173,8 @@ class HereFuelPricesProvider:
             "latitude": latitude,
             "longitude": longitude,
             "distance_miles": distance_miles,
+            # HERE fuel-price responses do not establish station opening hours.
+            "open_now": None,
             "fuel_prices": {fuel_type: selected_fuel.copy()},
             "selected_fuel": selected_fuel,
             "estimated_cost": estimated_cost,

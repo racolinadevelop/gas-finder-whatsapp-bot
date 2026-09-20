@@ -48,10 +48,22 @@ FUEL_TYPE_MAP = {
 }
 
 
+def parse_open_now(place: dict) -> bool | None:
+    """Only a current, explicit Google boolean proves open/closed."""
+    open_now = (place.get("currentOpeningHours") or {}).get("openNow")
+    return open_now if isinstance(open_now, bool) else None
+
+
+def _open_priority(station: dict) -> int:
+    # Unknown hours are not confirmed open; retain them only as fallback.
+    return 0 if station.get("open_now") is True else 1
+
+
 def sort_stations(stations: list, sort: str) -> list:
     if sort == "price":
         stations.sort(
             key=lambda station: (
+                _open_priority(station),
                 not station["selected_fuel"]["available"],
                 (
                     station["selected_fuel"]["price"]
@@ -65,6 +77,7 @@ def sort_stations(stations: list, sort: str) -> list:
     elif sort == "best":
         stations.sort(
             key=lambda station: (
+                _open_priority(station),
                 station["estimated_cost"] is None,
                 (
                     station["estimated_cost"]["estimated_total_cost"]
@@ -76,7 +89,9 @@ def sort_stations(stations: list, sort: str) -> list:
         )
 
     else:
-        stations.sort(key=lambda station: station["distance_miles"])
+        stations.sort(
+            key=lambda station: (_open_priority(station), station["distance_miles"])
+        )
 
     return stations
 
@@ -100,6 +115,9 @@ def _prefer_station(candidate: dict, current: dict) -> bool:
 
     if candidate_fuel["available"] != current_fuel["available"]:
         return candidate_fuel["available"]
+
+    if _open_priority(candidate) != _open_priority(current):
+        return _open_priority(candidate) < _open_priority(current)
 
     return (candidate_fuel.get("updated_at") or "") > (
         current_fuel.get("updated_at") or ""
@@ -268,6 +286,8 @@ def _search_nearby_gas_stations(
             "places.formattedAddress,"
             "places.location,"
             "places.fuelOptions,"
+            "places.businessStatus,"
+            "places.currentOpeningHours,"
             "nextPageToken"
         ),
     }
@@ -319,6 +339,17 @@ def _search_nearby_gas_stations(
         if distance_miles > radius_miles:
             continue
 
+        # Google may return closed stations with old fuel prices. Exclude
+        # only an explicit current-hour closed status or a non-operational
+        # business status; missing hours remain available but labelled.
+        if place.get("businessStatus") in {
+            "CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY", "FUTURE_OPENING"
+        }:
+            continue
+        open_now = parse_open_now(place)
+        if open_now is False:
+            continue
+
         display_name = place.get("displayName", {})
 
         station_name = display_name.get("text", "Unknown gas station")
@@ -362,6 +393,7 @@ def _search_nearby_gas_stations(
             "latitude": station_latitude,
             "longitude": station_longitude,
             "distance_miles": distance_miles,
+            "open_now": open_now,
             "fuel_prices": parsed_fuel_prices,
             "selected_fuel": selected_fuel,
             "estimated_cost": estimated_cost,

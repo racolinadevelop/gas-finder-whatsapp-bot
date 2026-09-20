@@ -143,6 +143,8 @@ TRANSLATIONS = {
 
         "station_price": "⛽ {fuel}: {price}",
         "station_distance": "📍 Distance: {distance:.2f} mi",
+        "station_open_now": "🟢 Open now (according to Google)",
+        "station_hours_unknown": "⚪ Opening hours unavailable — check before visiting",
         "station_address": "🏠 {address}",
 
         "price_unavailable": (
@@ -336,6 +338,8 @@ TRANSLATIONS = {
 
         "station_price": "⛽ {fuel}: {price}",
         "station_distance": "📍 Distancia: {distance:.2f} mi",
+        "station_open_now": "🟢 Abierta ahora (según Google)",
+        "station_hours_unknown": "⚪ Horario no disponible — comprueba antes de ir",
         "station_address": "🏠 {address}",
 
         "price_unavailable": (
