@@ -104,6 +104,53 @@ def create_test_checkout(payload: BillingUserRequest):
         ) from exc
 
 
+@router.post("/reset-canceled", dependencies=[Depends(require_internal_api_token)])
+def reset_canceled_test_subscription(payload: BillingUserRequest):
+    """Allow another TEST Checkout for this user after verified cancellation.
+
+    Requires the admin's existing internal token, a canceled ledger record and
+    a fresh authoritative Stripe TEST subscription in canceled state. The
+    reset does not affect favorites, language, or non-test subscriptions.
+    """
+    _require_test_mode()
+    gateway = _gateway()
+    store = _store()
+    record = store.get_test_subscription(payload.whatsapp_id)
+    if record is None or record["status"] != "canceled":
+        raise HTTPException(
+            status_code=409, detail="A canceled linked TEST subscription is required."
+        )
+    try:
+        current = gateway.get_subscription(record["subscription_id"])
+    except StripeTestError as exc:
+        raise HTTPException(
+            status_code=503, detail="Cannot verify canceled test subscription."
+        ) from exc
+    customer = current.get("customer")
+    if isinstance(customer, dict):
+        customer = customer.get("id")
+    if (
+        current.get("livemode") is not False
+        or current.get("id") != record["subscription_id"]
+        or customer != record["customer_id"]
+        or current.get("status") != "canceled"
+    ):
+        raise HTTPException(
+            status_code=409, detail="Stripe has not verified a canceled TEST subscription."
+        )
+    try:
+        store.reset_canceled_user(
+            payload.whatsapp_id,
+            customer_id=record["customer_id"],
+            subscription_id=record["subscription_id"],
+        )
+    except TestBillingStoreError as exc:
+        raise HTTPException(
+            status_code=409, detail="Test subscription changed during reset."
+        ) from exc
+    return {"reset": True, "test_mode": True}
+
+
 @router.post("/portal", dependencies=[Depends(require_internal_api_token)])
 def create_test_portal(payload: BillingUserRequest):
     _require_test_mode()

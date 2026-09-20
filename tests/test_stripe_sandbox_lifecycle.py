@@ -110,9 +110,10 @@ class FakeStripeTest:
     def create_checkout(self, whatsapp_id, **kwargs):
         assert whatsapp_id == USER
         self.calls.append("create_checkout")
+        session_id = self.checkout["id"]
         return {
-            "session_id": SESSION,
-            "url": "https://checkout.stripe.com/c/pay/cs_test_sandbox_123",
+            "session_id": session_id,
+            "url": "https://checkout.stripe.com/c/pay/" + session_id,
         }
 
     def create_portal(self, customer_id):
@@ -122,19 +123,41 @@ class FakeStripeTest:
 
     def get_checkout(self, session_id):
         self.calls.append("get_checkout")
-        assert session_id == SESSION
+        assert session_id == self.checkout["id"]
         return self.checkout.copy()
 
     def get_subscription(self, subscription_id):
         self.calls.append("get_subscription")
-        assert subscription_id == SUBSCRIPTION
+        assert subscription_id == self.subscription["id"]
+        if self.subscription["livemode"] is not False:
+            raise StripeTestError("Stripe verification did not return a TEST object")
         return self.subscription.copy()
 
     def complete_payment(self):
         self.checkout.update(
             status="complete", payment_status="paid",
-            customer=CUSTOMER, subscription=SUBSCRIPTION,
+            customer=self.subscription["customer"], subscription=self.subscription["id"],
         )
+
+
+    def next_subscription(self):
+        """Emulate a separate verified Stripe TEST Checkout for the same user."""
+        self.checkout = {
+            "id": "cs_test_sandbox_repeat", "livemode": False,
+            "mode": "subscription", "status": "open", "payment_status": "unpaid",
+            "client_reference_id": user_hash(USER),
+            "customer": None, "subscription": None,
+        }
+        self.subscription = {
+            "id": "sub_sandbox_repeat", "livemode": False,
+            "customer": "cus_sandbox_repeat", "status": "active",
+            "items": {"data": [{"price": {"id": PRICE}}]},
+            "latest_invoice": {
+                "id": "in_sandbox_repeat", "livemode": False,
+                "paid": True, "status": "paid", "amount_paid": 500,
+                "subscription": "sub_sandbox_repeat",
+            },
+        }
 
 
 def signed_event(event_id, event_type="checkout.session.completed", object_id=SESSION,
@@ -352,4 +375,121 @@ def test_live_subscription_snapshot_never_grants_test_entitlement(sandbox):
     gateway.complete_payment()
     gateway.subscription["livemode"] = True
     assert send_event(client, "evt_snapshot_live").status_code == 503
+    assert not ledger.has_premium_access(USER)
+
+
+def test_canceled_test_user_can_checkout_again_without_touching_favorites(sandbox):
+    client, ledger, gateway, db = sandbox
+    begin_checkout(client)
+    gateway.complete_payment()
+    assert send_event(client, "evt_cycle_one_paid").json()["applied"] is True
+    assert ledger.has_premium_access(USER)
+
+    # A Premium favorite is stored separately and survives a test-billing reset.
+    with sqlite3.connect(db.path) as conn:
+        conn.execute(
+            "CREATE TABLE premium_favorite_stations_test "
+            "(whatsapp_id_hash TEXT, station_name TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO premium_favorite_stations_test VALUES (?, ?)",
+            (user_hash(USER), "Saved Gas Station"),
+        )
+
+    gateway.subscription["status"] = "canceled"
+    assert send_event(
+        client, "evt_cycle_one_canceled",
+        "customer.subscription.deleted", SUBSCRIPTION,
+    ).json()["applied"] is True
+    assert not ledger.has_premium_access(USER)
+
+    response = client.post(
+        "/api/v1/billing/test/reset-canceled",
+        json={"whatsapp_id": USER}, headers=AUTH,
+    )
+    assert response.status_code == 200
+    assert response.json() == {"reset": True, "test_mode": True}
+    assert ledger.get_test_subscription(USER) is None
+    assert ledger.find_checkout(SESSION) is None
+    assert ledger.find_subscription(SUBSCRIPTION) is None
+    assert not ledger.has_premium_access(USER)
+    with sqlite3.connect(db.path) as conn:
+        assert conn.execute(
+            "SELECT station_name FROM premium_favorite_stations_test "
+            "WHERE whatsapp_id_hash = ?", (user_hash(USER),),
+        ).fetchall() == [("Saved Gas Station",)]
+        assert conn.execute(
+            "SELECT event_id FROM stripe_test_processed_events "
+            "WHERE event_id = 'evt_cycle_one_canceled'",
+        ).fetchone() is not None
+
+    # Even a correctly signed delayed event from the old Checkout is unbound
+    # and cannot restore a stale subscription or revoke the new one.
+    assert send_event(
+        client, "evt_cycle_one_delayed", object_id=SESSION,
+    ).json() == {"received": True, "applied": False}
+
+    gateway.next_subscription()
+    second = client.post(
+        "/api/v1/billing/test/checkout",
+        json={"whatsapp_id": USER}, headers=AUTH,
+    )
+    assert second.status_code == 200
+    assert second.json()["url"].endswith("/cs_test_sandbox_repeat")
+    assert ledger.find_checkout("cs_test_sandbox_repeat") == (
+        user_hash(USER), None, None,
+    )
+    gateway.complete_payment()
+    assert send_event(
+        client, "evt_cycle_two_paid", object_id="cs_test_sandbox_repeat",
+    ).json()["applied"] is True
+    assert ledger.has_premium_access(USER)
+    assert subscription_service.can_use_feature(USER, Feature.FAVORITES)
+    assert ledger.get_test_subscription(USER) == {
+        "customer_id": "cus_sandbox_repeat",
+        "subscription_id": "sub_sandbox_repeat",
+        "status": "active",
+    }
+    assert send_event(
+        client, "evt_cycle_one_very_late", object_id=SESSION,
+    ).json()["applied"] is False
+    assert ledger.has_premium_access(USER)
+
+
+def test_sandbox_reset_denies_active_unverified_or_unauthorized_attempts(sandbox):
+    client, ledger, gateway, db = sandbox
+    path = "/api/v1/billing/test/reset-canceled"
+    data = {"whatsapp_id": USER}
+    assert client.post(path, json=data).status_code == 401
+    assert client.post(path, json=data, headers=AUTH).status_code == 409
+
+    begin_checkout(client)
+    gateway.complete_payment()
+    assert send_event(client, "evt_first_paid").json()["applied"] is True
+    assert client.post(path, json=data, headers=AUTH).status_code == 409
+
+    gateway.subscription["status"] = "canceled"
+    assert send_event(
+        client, "evt_first_cancel", "customer.subscription.deleted",
+        SUBSCRIPTION,
+    ).json()["applied"] is True
+    assert not ledger.has_premium_access(USER)
+
+    gateway.subscription["status"] = "active"
+    assert client.post(path, json=data, headers=AUTH).status_code == 409
+    assert ledger.find_checkout(SESSION) is not None
+
+    gateway.subscription["status"] = "canceled"
+    gateway.subscription["livemode"] = True
+    assert client.post(path, json=data, headers=AUTH).status_code == 503
+    assert ledger.find_checkout(SESSION) is not None
+
+    gateway.subscription["livemode"] = False
+    gateway.subscription["customer"] = "cus_other"
+    assert client.post(path, json=data, headers=AUTH).status_code == 409
+    assert ledger.find_checkout(SESSION) is not None
+
+    gateway.subscription["customer"] = CUSTOMER
+    assert client.post(path, json=data, headers=AUTH).status_code == 200
+    assert ledger.find_checkout(SESSION) is None
     assert not ledger.has_premium_access(USER)
