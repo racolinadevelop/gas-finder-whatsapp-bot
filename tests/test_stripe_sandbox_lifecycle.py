@@ -129,6 +129,8 @@ class FakeStripeTest:
     def get_subscription(self, subscription_id):
         self.calls.append("get_subscription")
         assert subscription_id == self.subscription["id"]
+        if self.subscription["livemode"] is not False:
+            raise StripeTestError("Stripe verification did not return a TEST object")
         return self.subscription.copy()
 
     def complete_payment(self):
