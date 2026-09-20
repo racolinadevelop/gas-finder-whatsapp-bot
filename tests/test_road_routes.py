@@ -89,6 +89,56 @@ def test_failed_matrix_does_not_replace_geographic_distance(monkeypatch):
     ) is original
 
 
+def test_route_http_rejection_logs_only_safe_status_not_google_error_body(
+    monkeypatch, caplog,
+):
+    # The provider's error message can contain sensitive details. Avoid
+    # printing it; keep only HTTP code and a whitelisted machine status.
+    monkeypatch.setattr(
+        "app.services.road_routes.httpx.post",
+        lambda *args, **kwargs: FakeResponse(
+            {
+                "error": {
+                    "status": "PERMISSION_DENIED",
+                    "message": "private location and secret test-key",
+                },
+            },
+            status_code=403,
+        ),
+    )
+    original = places(1)
+    with caplog.at_level("WARNING", logger="app.services.road_routes"):
+        result = add_road_routes(
+            original,
+            latitude=38.25,
+            longitude=-85.75,
+            api_key="secret test-key",
+        )
+    assert result is original
+    assert "http_status=403 google_status=PERMISSION_DENIED" in caplog.text
+    assert "secret test-key" not in caplog.text
+    assert "private location" not in caplog.text
+    assert "38.25" not in caplog.text
+
+
+def test_route_http_rejection_unknown_status_is_not_logged_verbatim(
+    monkeypatch, caplog,
+):
+    monkeypatch.setattr(
+        "app.services.road_routes.httpx.post",
+        lambda *args, **kwargs: FakeResponse(
+            {"error": {"status": "SECRET_TOKEN"}},
+            status_code=400,
+        ),
+    )
+    with caplog.at_level("WARNING", logger="app.services.road_routes"):
+        add_road_routes(
+            places(1), latitude=38.25, longitude=-85.75, api_key="key"
+        )
+    assert "http_status=400 google_status=unknown" in caplog.text
+    assert "SECRET_TOKEN" not in caplog.text
+
+
 def test_missing_route_or_invalid_duration_is_not_mislabeled(monkeypatch):
     monkeypatch.setattr(
         "app.services.road_routes.httpx.post",

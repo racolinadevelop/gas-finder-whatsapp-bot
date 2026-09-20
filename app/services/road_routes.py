@@ -83,6 +83,29 @@ def add_road_routes(
         elements = response.json()
         if not isinstance(elements, list):
             return result
+    except httpx.HTTPStatusError as exc:
+        # Do not log the response body, request headers, key or coordinates.
+        # Only the HTTP code and Google's machine-readable error category
+        # are needed to distinguish API permissions from request errors.
+        error_status = None
+        try:
+            error = exc.response.json().get("error", {})
+            if isinstance(error, dict):
+                status = error.get("status")
+                if status in {
+                    "PERMISSION_DENIED", "FAILED_PRECONDITION",
+                    "INVALID_ARGUMENT", "RESOURCE_EXHAUSTED",
+                    "UNAUTHENTICATED", "NOT_FOUND", "UNAVAILABLE",
+                }:
+                    error_status = status
+        except (ValueError, TypeError, AttributeError):
+            pass
+        logger.warning(
+            "Road-route request rejected: http_status=%s google_status=%s",
+            exc.response.status_code,
+            error_status or "unknown",
+        )
+        return result
     except (httpx.HTTPError, ValueError, TypeError) as exc:
         logger.warning("Road-route estimate unavailable: %s", type(exc).__name__)
         return result
