@@ -1281,12 +1281,14 @@ def test_whatsapp_button_flow(monkeypatch):
         sort="price",
     )
 
-    assert [row["id"] for row in sent_list_messages[0]["rows"]] == [
+    assert [row["id"] for row in sent_list_messages[2]["rows"]] == [
         "distance_1",
         "distance_3",
         "distance_5",
         "distance_10",
         "distance_custom",
+        "nav_back",
+        "nav_menu",
     ]
 
     distance_payload = {
@@ -1564,7 +1566,10 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         sort="price",
     )
 
-    assert sent_list_messages[0]["button_text"] == "Elegir distancia"
+    assert sent_list_messages[2]["button_text"] == "Elegir distancia"
+    assert [row["id"] for row in sent_list_messages[2]["rows"]][-2:] == [
+        "nav_back", "nav_menu",
+    ]
 
     distance_payload = {
         "entry": [
