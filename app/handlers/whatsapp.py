@@ -2,7 +2,6 @@ import logging
 
 from app.conversation import (
     ConversationSession,
-    ConversationState,
     ConversationTransitions,
     NavigationAction,
     SearchFlowDecision,
@@ -13,12 +12,11 @@ from app.handlers.interactive_messages import process_interactive_message
 from app.handlers.location_messages import process_location_message
 from app.handlers.location_results import run_location_search
 from app.handlers.search_flow_delivery import deliver_search_flow_decision
-from app.handlers.text_messages import GREETINGS, process_text_message
+from app.handlers.text_messages import process_text_message
 from app.handlers.webhook_dispatch import process_webhook
 from app.intelligence import build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
-from app.presentation.delivery import deliver_prompt
 from app.presentation import (
     Prompt,
     build_distance_prompt,
@@ -28,6 +26,7 @@ from app.presentation import (
     build_sort_prompt,
     build_state_prompt,
 )
+from app.presentation.delivery import deliver_prompt
 from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
@@ -36,8 +35,8 @@ from app.services.whatsapp import (
     send_reply_buttons,
     send_text_message,
 )
-from app.subscriptions import SubscriptionService
 from app.runtime import build_runtime_state
+from app.subscriptions import SubscriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +152,7 @@ def handle_whatsapp_webhook(payload: dict) -> dict:
         dispatch_message=message_router.dispatch,
     )
 
+
 def apply_search_flow_decision(
     sender: str,
     decision: SearchFlowDecision,
@@ -168,6 +168,7 @@ def apply_search_flow_decision(
         send_location=send_location_prompt,
     )
 
+
 def handle_text_message(incoming_message: IncomingMessage) -> None:
     process_text_message(
         incoming_message,
@@ -182,6 +183,7 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         apply_decision=apply_search_flow_decision,
     )
 
+
 def handle_interactive_message(incoming_message: IncomingMessage) -> None:
     process_interactive_message(
         incoming_message,
@@ -192,6 +194,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         dispatch_state_interactive=interactive_state_router.dispatch,
         send_expected=send_expected_prompt,
     )
+
 
 def search_from_location(
     incoming_message: IncomingMessage,
@@ -207,6 +210,7 @@ def search_from_location(
         send_prompt=send_prompt,
     )
 
+
 def handle_location_message(incoming_message: IncomingMessage) -> None:
     process_location_message(
         incoming_message,
@@ -215,6 +219,7 @@ def handle_location_message(incoming_message: IncomingMessage) -> None:
         dispatch_state_location=location_state_router.dispatch,
         send_expected=send_expected_prompt,
     )
+
 
 def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
     logger.info(

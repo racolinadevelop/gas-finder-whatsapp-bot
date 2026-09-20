@@ -19,21 +19,28 @@ in production with `API_DOCS_ENABLED=false`.
 
 ## Current Architecture
 
+The FastAPI entry point is intentionally small. WhatsApp conversation routing,
+prompt delivery, station lookup, state storage and subscription policy live in
+separate modules, with `app/handlers/whatsapp.py` acting as the composition root.
+
 ```text
-WhatsApp User
-      ↓
-Meta WhatsApp Business Platform
-      ↓
-Railway
-      ↓
-FastAPI
-      ↓
-Configured station provider
-      ↓
-Gas station results
-      ↓
-WhatsApp response
+WhatsApp / Meta
+     ↓
+FastAPI route: signature verification
+     ↓
+Webhook parse + deduplication + subscription identity
+     ↓
+Message type router → conversation state router
+     ↓
+Guided choices / search decision → location search
+     ↓
+Google Places or HERE provider → localized results
+     ↓
+WhatsApp response (primary prompt, then Back/Menu when appropriate)
 ```
+
+See [Architecture and refactor closeout](docs/ARCHITECTURE.md) for module
+boundaries, preserved behaviors, automated tests and the live smoke-test checklist.
 
 ## Current Features
 
@@ -67,7 +74,10 @@ WhatsApp response
 - Understand a requested maximum distance in miles or kilometers
 - Offer a guided WhatsApp distance list with 1, 3, 5, 10 miles or a custom value
 - Explain why the top "Best option" balances price and travel distance
-- Maintain a centralized Free/Premium subscription and feature-access foundation
+- Exclude Google stations explicitly marked closed or non-operational and label unknown hours
+- Keep guided-search preferences when navigating Back or retrying after a provider failure
+- Ignore repeated WhatsApp message IDs and rate-limit station searches per user
+- Maintain a centralized Free/Premium subscription and feature-access foundation (billing not yet connected)
 - Keep language interpretation separate from deterministic station lookup
 - Optionally use an OpenAI Structured Outputs fallback for ambiguous messages
 - Send automatic WhatsApp replies
@@ -99,33 +109,27 @@ WhatsApp response
 ```text
 gas-finder-whatsapp-bot/
 ├── app/
-│   ├── config.py
-│   ├── main.py
-│   ├── schemas.py
-│   ├── conversation/
-│   ├── handlers/
-│   ├── intelligence/
-│   │   ├── interpreter.py
-│   │   └── models.py
-│   ├── models/
-│   ├── parsers/
-│   ├── providers/
-│   ├── routers/
-│   ├── routing/
-│   ├── subscriptions/
-│   ├── services/
-│   │   ├── google_places.py
-│   │   ├── stations.py
-│   │   └── whatsapp.py
+│   ├── main.py               # FastAPI application factory / health
+│   ├── config.py              # Environment and production validation
+│   ├── routers/               # HTTP routes and Meta webhook signature
+│   ├── handlers/              # Webhook, text, buttons, location and results
+│   ├── routing/               # Message-type and conversation-state routers
+│   ├── conversation/          # States, transitions and search decisions
+│   ├── models/                # Normalized incoming messages
+│   ├── parsers/               # Meta payload normalization
+│   ├── presentation/          # Localized prompts and WhatsApp delivery
+│   ├── intelligence/          # Deterministic and optional AI intent parsing
+│   ├── services/              # Station lookup and WhatsApp transport
+│   ├── providers/             # Gas-station provider interface / HERE
+│   ├── persistence/           # Redis client
+│   ├── rate_limits/           # Search throttling
+│   ├── webhooks/              # Message deduplication
+│   ├── subscriptions/         # Free/Premium state and access policy
 │   └── utils/
-├── docs/
-│   ├── API_USAGE.md
-│   ├── GOOGLE_PLACES_SETUP.md
-│   ├── PRIVACY_POLICY.md
-│   └── WHATSAPP_CLOUD_SETUP.md
-├── tests/
+├── docs/                      # Architecture, provider and setup guides
+├── tests/                     # Unit, API and simulated webhook flow tests
+├── .github/workflows/tests.yml
 ├── .env.example
-├── .gitignore
 ├── railway.toml
 ├── README.md
 └── requirements.txt
@@ -207,9 +211,12 @@ Never commit `.env`.
 
 ### Gas-station data provider
 
-Google remains the default provider. It now fetches up to 20 nearby candidates,
-then removes duplicates and stations without a price before sorting and showing
-the requested number of results.
+Google remains the default provider. It uses Places Text Search with up to
+three pages of 20 candidates each, enforces the requested radius locally,
+removes duplicate addresses and stations without a selected-fuel price, then
+sorts and displays the requested number of results. Explicitly closed or
+non-operational Google stations are excluded; stations with unknown hours
+remain as labeled fallback results.
 
 To test HERE Fuel Prices instead, obtain a HERE API key and configure:
 
@@ -343,35 +350,32 @@ https://gas-finder-whatsapp-bot-production.up.railway.app/api/v1/whatsapp/webhoo
 
 ## Current WhatsApp Flow
 
-When the user sends a text message:
+A greeting starts the guided conversation rather than requesting location
+immediately:
 
 ```text
-User
- ↓
-"hello"
- ↓
-Bot asks for location
+"hola" / "hello"
+       ↓
+Select English / Español
+       ↓
+Select regular / premium / diesel
+       ↓
+Select closest / cheapest / best estimated option
+       ↓
+Select 1 / 3 / 5 / 10 miles or a valid custom distance
+       ↓
+Share location through WhatsApp's native location request
+       ↓
+Search selected provider; show priced stations and available hours status
+       ↓
+Results + Back (new location with saved preferences) / Menu (restart)
 ```
 
-When the user shares a location:
-
-```text
-WhatsApp location
-      ↓
-FastAPI webhook
-      ↓
-Latitude + longitude
-      ↓
-Google Places
-      ↓
-Gas stations
-      ↓
-Price + distance + best calculation
-      ↓
-Formatted WhatsApp message
-      ↓
-User
-```
+The bot also accepts supported natural-language search requests. Back/Menu
+work across the guided flow; stale buttons or inputs from the wrong step
+re-prompt the expected screen without replacing saved preferences.
+When a search provider fails, users can share their location again with
+their preferences preserved.
 
 ## Example Bot Response
 
@@ -419,8 +423,20 @@ The test suite covers:
 - best-option calculation
 - WhatsApp text replies
 - WhatsApp gas station message formatting
+- Meta webhook signature validation and duplicate-event handling
+- guided conversation state, Back/Menu and out-of-sequence input recovery
+- Spanish and English HTTP webhook journeys with faked external APIs, including
+  custom distance, search failure and preserved preferences
 
 ## Documentation
+
+Architecture, module responsibilities and post-deployment smoke tests:
+
+[Architecture and Refactor Closeout](docs/ARCHITECTURE.md)
+
+Gas station providers and operating-hours behavior:
+
+[Gas Station Providers](docs/GAS_STATION_PROVIDERS.md)
 
 Google Places setup:
 
@@ -497,33 +513,42 @@ PostgreSQL-ready persistent subscription state ✅
 
 ## Current Limitations
 
-The current MVP calculates geographic straight-line distance.
-
-It does not yet calculate actual driving distance.
-
-The bot currently uses default search preferences when the user sends a location.
-
-Future versions will allow the user to configure these preferences directly through WhatsApp.
+- Distance is currently geographic straight-line distance, not road travel
+  distance or an ETA; navigation links are not in the WhatsApp results yet.
+- A user can select search preferences in the active guided flow, but the bot
+  does not yet persist preferred fuel or radius as a separate user profile.
+  A user sharing location without an existing session uses default values.
+- Station prices and opening hours depend on provider coverage and freshness.
+  Unknown hours are not proof that a station is open. HERE does not verify
+  real-time open status.
+- The Free/Premium subscription storage and policy are present, but checkout,
+  billing webhooks, customer portal and paid feature enforcement are not
+  implemented. No real payments are collected by this project yet.
+- Automated tests mock external Meta/Google/HERE calls. A live WhatsApp
+  smoke test is still required after deployment; see
+  [Architecture and Refactor Closeout](docs/ARCHITECTURE.md).
 
 ## Roadmap
 
-Planned features include:
+The guided WhatsApp conversation and initial modularization are implemented.
+Next product stages, in planned order:
 
-- WhatsApp commands:
-  - regular
-  - premium
-  - diesel
-  - closest
-  - cheapest
-  - best
-- User preferences
-- Actual driving distance
-- Search history
-- Favorite gas stations
-- Fuel price alerts
-- Improved WhatsApp conversational flow
-- Docker
-- Additional production monitoring
+1. Complete post-refactor automated regression checks and the live WhatsApp
+   smoke test after deployment.
+2. Add road-driving distance, travel ETA and station navigation links.
+3. Clarify fuel-price update timestamps and stale-price warnings.
+4. Save user-level fuel/radius preferences separately from active conversations.
+5. Connect Stripe subscriptions in test mode: individual checkout links,
+   verified payment webhooks, a subscription-management portal and explicit
+   Free/Premium feature gates; do not enable live billing until paid features
+   and the full renewal/cancellation lifecycle have been tested.
+6. Add favorites/history and price alerts, assigning appropriate Free/Premium
+   access before enabling real charges.
+7. Automate reusable Meta/WhatsApp onboarding and improve production
+   monitoring, API costs and deployment verification.
+
+The current Free/Premium records and feature enum are architecture groundwork,
+not a functioning payment integration or a promise of features already delivered.
 
 ## Production Configuration Validation
 
