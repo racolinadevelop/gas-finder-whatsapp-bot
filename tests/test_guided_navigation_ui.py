@@ -161,7 +161,7 @@ def test_back_button_from_second_screen_returns_to_language_without_greeting(
     assert "Ramon" not in sent[0][1]["body_text"]
 
 
-def test_location_step_sends_navigation_before_native_location_request(monkeypatch):
+def test_location_step_sends_navigation_below_native_location_request(monkeypatch):
     whatsapp_handler.conversation_store.clear()
     session = whatsapp_handler.conversation_store.update(
         SENDER,
@@ -175,14 +175,14 @@ def test_location_step_sends_navigation_before_native_location_request(monkeypat
 
     whatsapp_handler.send_state_prompt(SENDER, session)
 
-    assert [kind for kind, _ in sent] == ["buttons", "text"]
-    assert [button["id"] for button in sent[0][1]["buttons"]] == [
+    assert [kind for kind, _ in sent] == ["text", "buttons"]
+    assert [button["id"] for button in sent[1][1]["buttons"]] == [
         "nav_back", "nav_menu",
     ]
-    assert [button["title"] for button in sent[0][1]["buttons"]] == [
+    assert [button["title"] for button in sent[1][1]["buttons"]] == [
         "⬅️ Atrás", "🏠 Menú",
     ]
-    assert "esperando tu ubicación" in sent[1][1]["message"].lower()
+    assert "esperando tu ubicación" in sent[0][1]["message"].lower()
 
 
 def test_back_from_location_returns_to_distance_with_saved_preferences(monkeypatch):

@@ -67,24 +67,6 @@ search_rate_limiter = runtime_state.search_rate_limiter
 
 def send_prompt(sender: str, prompt: Prompt) -> None:
     session = conversation_store.get(sender)
-    if (
-        isinstance(prompt, TextPrompt)
-        and session is not None
-        and session.state == ConversationState.WAITING_LOCATION
-    ):
-        # Show navigation first so the native Share Location action remains
-        # the latest message. A failure to send navigation must not prevent
-        # the user from receiving the location request.
-        navigation = build_navigation_prompt(session.language)
-        try:
-            send_reply_buttons(
-                to=sender,
-                body_text=navigation.body_text,
-                buttons=navigation.buttons,
-            )
-        except WhatsAppServiceError as exc:
-            logger.warning("Could not send location navigation: %s", exc)
-
     try:
         if isinstance(prompt, ReplyButtonsPrompt):
             send_reply_buttons(
@@ -103,15 +85,15 @@ def send_prompt(sender: str, prompt: Prompt) -> None:
         elif isinstance(prompt, TextPrompt):
             send_text_message(to=sender, message=prompt.message)
 
-        # Other guided screens show navigation after their choices; the
-        # location screen was already handled above to preserve message order.
+        # Send navigation after the primary prompt, including the native
+        # location request, so Back/Menu appear below Share Location.
+        # Language and final-results prompts already have their own buttons.
         if (
             session is not None
             and session.state
             not in {
                 ConversationState.NEW,
                 ConversationState.WAITING_LANGUAGE,
-                ConversationState.WAITING_LOCATION,
                 ConversationState.WAITING_RESULTS,
             }
         ):
