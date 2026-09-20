@@ -110,9 +110,10 @@ class FakeStripeTest:
     def create_checkout(self, whatsapp_id, **kwargs):
         assert whatsapp_id == USER
         self.calls.append("create_checkout")
+        session_id = self.checkout["id"]
         return {
-            "session_id": SESSION,
-            "url": "https://checkout.stripe.com/c/pay/cs_test_sandbox_123",
+            "session_id": session_id,
+            "url": "https://checkout.stripe.com/c/pay/" + session_id,
         }
 
     def create_portal(self, customer_id):
@@ -122,19 +123,39 @@ class FakeStripeTest:
 
     def get_checkout(self, session_id):
         self.calls.append("get_checkout")
-        assert session_id == SESSION
+        assert session_id == self.checkout["id"]
         return self.checkout.copy()
 
     def get_subscription(self, subscription_id):
         self.calls.append("get_subscription")
-        assert subscription_id == SUBSCRIPTION
+        assert subscription_id == self.subscription["id"]
         return self.subscription.copy()
 
     def complete_payment(self):
         self.checkout.update(
             status="complete", payment_status="paid",
-            customer=CUSTOMER, subscription=SUBSCRIPTION,
+            customer=self.subscription["customer"], subscription=self.subscription["id"],
         )
+
+
+    def next_subscription(self):
+        """Emulate a separate verified Stripe TEST Checkout for the same user."""
+        self.checkout = {
+            "id": "cs_test_sandbox_repeat", "livemode": False,
+            "mode": "subscription", "status": "open", "payment_status": "unpaid",
+            "client_reference_id": user_hash(USER),
+            "customer": None, "subscription": None,
+        }
+        self.subscription = {
+            "id": "sub_sandbox_repeat", "livemode": False,
+            "customer": "cus_sandbox_repeat", "status": "active",
+            "items": {"data": [{"price": {"id": PRICE}}]},
+            "latest_invoice": {
+                "id": "in_sandbox_repeat", "livemode": False,
+                "paid": True, "status": "paid", "amount_paid": 500,
+                "subscription": "sub_sandbox_repeat",
+            },
+        }
 
 
 def signed_event(event_id, event_type="checkout.session.completed", object_id=SESSION,
