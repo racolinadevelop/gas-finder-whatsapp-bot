@@ -1,8 +1,8 @@
 """Isolated Stripe TEST-mode Checkout/Portal transport and signed webhook verifier.
 
-The verified webhook is observational in this stage: it MUST NOT change plans.
-Before enabling Premium entitlements, persist an authenticated checkout-to-user
-binding and handle subscription lifecycle events idempotently in PostgreSQL.
+Verified Stripe TEST webhooks can update the separate sandbox entitlement
+ledger only after a durable Checkout-to-user binding and paid-status validation.
+No live billing or general user subscription record is modified.
 """
 
 import hashlib
@@ -161,7 +161,7 @@ class StripeTestGateway:
             or not url.startswith("https://checkout.stripe.com/")
         ):
             raise StripeTestError("Stripe did not return a valid TEST Checkout")
-        return {"url": url}
+        return {"url": url, "session_id": result["id"]}
 
     def create_portal(self, customer_id: str) -> dict:
         """Use only a previously linked customer from the subscription store."""
@@ -178,3 +178,39 @@ class StripeTestGateway:
         if not isinstance(url, str) or not url.startswith("https://billing.stripe.com/"):
             raise StripeTestError("Stripe did not return a test portal URL")
         return {"url": url}
+
+    def _get(self, path: str, *, params: dict | None = None) -> dict:
+        """Retrieve an authoritative current TEST object from Stripe."""
+        try:
+            response = httpx.get(
+                STRIPE_API + path,
+                params=params,
+                auth=(self.settings.secret_key, ""),
+                timeout=15.0,
+            )
+            response.raise_for_status()
+            result = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            raise StripeTestError("Stripe test verification unavailable") from exc
+        if not isinstance(result, dict) or result.get("livemode") is not False:
+            raise StripeTestError("Stripe verification did not return a TEST object")
+        return result
+
+    def get_checkout(self, session_id: str) -> dict:
+        if not session_id.startswith("cs_test_") or not session_id.isascii():
+            raise StripeTestError("Invalid test Checkout session")
+        result = self._get(f"/checkout/sessions/{session_id}")
+        if result.get("id") != session_id:
+            raise StripeTestError("Stripe test Checkout identity mismatch")
+        return result
+
+    def get_subscription(self, subscription_id: str) -> dict:
+        if not subscription_id.startswith("sub_") or not subscription_id.isascii():
+            raise StripeTestError("Invalid test subscription")
+        result = self._get(
+            f"/subscriptions/{subscription_id}",
+            params={"expand[]": "latest_invoice"},
+        )
+        if result.get("id") != subscription_id:
+            raise StripeTestError("Stripe test subscription identity mismatch")
+        return result
