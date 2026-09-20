@@ -6,15 +6,15 @@ from app.conversation import (
     ConversationTransitions,
     NavigationAction,
     SearchFlowDecision,
-    decide_search_flow,
     parse_navigation_action,
 )
 from app.conversation.options import LANGUAGE_BUTTONS
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.location_results import run_location_search
 from app.handlers.search_flow_delivery import deliver_search_flow_decision
+from app.handlers.text_messages import GREETINGS, process_text_message
 from app.handlers.webhook_dispatch import process_webhook
-from app.intelligence import IntentType, build_intent_interpreter
+from app.intelligence import build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
 from app.presentation.delivery import deliver_prompt
@@ -39,16 +39,6 @@ from app.subscriptions import SubscriptionService
 from app.runtime import build_runtime_state
 
 logger = logging.getLogger(__name__)
-
-GREETINGS = {
-    "hi",
-    "hello",
-    "hey",
-    "hola",
-    "good morning",
-    "good afternoon",
-    "good evening",
-}
 
 runtime_state = build_runtime_state()
 conversation_store = runtime_state.conversation_store
@@ -178,57 +168,18 @@ def apply_search_flow_decision(
     )
 
 def handle_text_message(incoming_message: IncomingMessage) -> None:
-    sender = incoming_message.sender
-    text = incoming_message.text or ""
-    normalized_text = text.lower().strip()
-    navigation_action = parse_navigation_action(text)
-
-    if navigation_action is not None:
-        handle_navigation(sender, navigation_action)
-        return
-
-    if normalized_text in GREETINGS:
-        conversation_transitions.begin(
-            sender,
-            profile_name=incoming_message.profile_name,
-        )
-
-        send_language_prompt(
-            sender,
-            display_name=incoming_message.profile_name,
-        )
-
-        return
-
-    current_session = conversation_store.get(sender)
-    if current_session is not None and text_state_router.dispatch(
+    process_text_message(
         incoming_message,
-        current_session,
-    ):
-        return
-
-    # While waiting for a location, unrelated text must not silently
-    # overwrite the search preferences. Navigation and greetings were
-    # already handled above.
-    if (
-        current_session is not None
-        and current_session.state == ConversationState.WAITING_LOCATION
-    ):
-        send_expected_prompt(sender, current_session)
-        return
-
-    interpretation = intent_interpreter.interpret(text)
-    if interpretation.intent != IntentType.SEARCH_GAS:
-        session = conversation_transitions.ensure_started(sender)
-        send_expected_prompt(sender, session)
-        return
-
-    decision = decide_search_flow(
-        conversation_store.get(sender),
-        interpretation,
+        navigate=handle_navigation,
+        begin=conversation_transitions.begin,
+        send_language=send_language_prompt,
+        get_session=conversation_store.get,
+        dispatch_state_text=text_state_router.dispatch,
+        send_expected=send_expected_prompt,
+        interpret=intent_interpreter.interpret,
+        ensure_started=conversation_transitions.ensure_started,
+        apply_decision=apply_search_flow_decision,
     )
-    apply_search_flow_decision(sender, decision)
-
 
 def handle_interactive_message(incoming_message: IncomingMessage) -> None:
     sender = incoming_message.sender
