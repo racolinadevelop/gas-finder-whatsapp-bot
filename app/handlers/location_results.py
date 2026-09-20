@@ -10,6 +10,7 @@ from collections.abc import Callable
 from app.conversation import ConversationSession, ConversationState
 from app.i18n import t
 from app.models import IncomingMessage
+from app.preferences import SearchPreferences
 from app.presentation import Prompt, build_results_navigation_prompt
 from app.providers import GasStationProviderError
 from app.services.whatsapp import WhatsAppServiceError
@@ -26,6 +27,9 @@ def run_location_search(
     send_text: Callable[..., dict],
     update_session: Callable[..., ConversationSession],
     send_prompt: Callable[[str, Prompt], None],
+    save_preferences: Callable[[str, SearchPreferences], None] = (
+        lambda sender, preferences: None
+    ),
 ) -> None:
     """Search and show results while retaining preferences for Back/Menu."""
     sender = incoming_message.sender
@@ -71,4 +75,7 @@ def run_location_search(
     # Only successful result delivery changes the state. Keep fuel, sorting,
     # distance and language preferences for the next location request.
     update_session(sender, {"state": ConversationState.WAITING_RESULTS})
+    if session.state == ConversationState.WAITING_LOCATION:
+        # Only completed guided searches update the separate user profile.
+        save_preferences(sender, SearchPreferences.from_session(session))
     send_prompt(sender, build_results_navigation_prompt(session.language))
