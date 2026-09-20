@@ -10,6 +10,12 @@ from app.conversation import (
     SearchFlowDecision,
 )
 from app.conversation.options import LANGUAGE_BUTTONS
+from app.favorites import (
+    FavoriteStoreError,
+    InMemoryFavoriteStore,
+    PostgresFavoriteStore,
+)
+from app.favorites.models import FavoriteStation
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.interactive_messages import process_interactive_message
 from app.handlers.location_messages import process_location_message
@@ -32,6 +38,7 @@ from app.presentation import (
     build_state_prompt,
 )
 from app.presentation.delivery import deliver_prompt
+from app.presentation.prompts import build_favorites_result_navigation_prompt
 from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
@@ -41,7 +48,7 @@ from app.services.whatsapp import (
     send_text_message,
 )
 from app.runtime import build_runtime_state
-from app.subscriptions import SubscriptionService
+from app.subscriptions import Feature, SubscriptionService
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +64,9 @@ subscription_service = SubscriptionService(
     runtime_state.subscription_store, test_entitlements=test_billing_store,
 )
 location_search_service = LocationSearchService()
+favorites_store = (
+    PostgresFavoriteStore(DATABASE_URL) if DATABASE_URL else InMemoryFavoriteStore()
+)
 conversation_transitions = ConversationTransitions(conversation_store)
 message_deduplicator = runtime_state.message_deduplicator
 search_rate_limiter = runtime_state.search_rate_limiter
@@ -209,6 +219,111 @@ def handle_plan_status(sender: str) -> None:
     send_text_message(to=sender, message=message)
 
 
+
+def favorite_language(sender: str) -> str:
+    session = conversation_store.get(sender)
+    return session.language if session and session.state not in {
+        ConversationState.NEW, ConversationState.WAITING_LANGUAGE
+    } else "es"
+
+
+def handle_favorite_action(sender: str, action: str, index: int | None) -> None:
+    """Operate only on the authenticated Meta webhook sender, never a supplied ID."""
+    language = favorite_language(sender)
+    spanish = language == "es"
+    try:
+        if not subscription_service.can_use_feature(sender, Feature.FAVORITES):
+            send_text_message(
+                to=sender,
+                message=(
+                    "⭐ Guardar y consultar favoritas requiere Premium. "
+                    "La búsqueda de gasolineras sigue siendo gratis. "
+                    "Los pagos reales aún no están activados."
+                    if spanish else
+                    "⭐ Saving and viewing favorites requires Premium. "
+                    "Gas-station search stays free. Real payments are not enabled."
+                ),
+            )
+            return
+
+        if action == "list":
+            favorites = favorites_store.list_favorites(sender)
+            if not favorites:
+                message = (
+                    "⭐ Aún no tienes favoritas. Tras buscar gasolineras, "
+                    "elige «Guardar 1–5» para añadir una."
+                    if spanish else
+                    "⭐ You have no favorites yet. After a search, "
+                    "choose Save 1–5 to add one."
+                )
+            else:
+                title = "⭐ Mis favoritas" if spanish else "⭐ My favorites"
+                lines = [title]
+                for position, station in enumerate(favorites, start=1):
+                    address = f" — {station.address}" if station.address else ""
+                    lines.append(f"{position}. {station.name}{address}")
+                lines.append(
+                    "Para quitar una: «eliminar favorita 1»."
+                    if spanish else
+                    "To remove one: “remove favorite 1”."
+                )
+                message = "\n".join(lines)
+        elif action == "save" and index is not None:
+            chosen = favorites_store.add_from_recent(sender, index)
+            message = (
+                f"⭐ Guardada: {chosen.name}. Escribe «mis favoritas» para ver tu lista."
+                if spanish else
+                f"⭐ Saved: {chosen.name}. Type “my favorites” to view your list."
+            )
+        elif action == "remove" and index is not None:
+            chosen = favorites_store.remove_favorite(sender, index)
+            message = (
+                f"✅ Eliminada: {chosen.name}."
+                if spanish else
+                f"✅ Removed: {chosen.name}."
+            )
+        else:
+            return
+    except FavoriteStoreError as exc:
+        reason = str(exc)
+        if reason == "no_recent_result":
+            message = (
+                "Busca gasolineras primero y elige el número mostrado más reciente."
+                if spanish else
+                "Search for gas stations first and choose a number from the latest results."
+            )
+        elif reason == "limit":
+            message = (
+                "Has llegado al límite de 10 favoritas. "
+                "Escribe «mis favoritas» y elimina una antes de guardar otra."
+                if spanish else
+                "You've reached the 10-favorite limit. "
+                "Type “my favorites” and remove one before saving another."
+            )
+        else:
+            message = (
+                "No encontré esa favorita. Escribe «mis favoritas» para ver los números."
+                if spanish else
+                "I couldn't find that favorite. Type “my favorites” for the numbers."
+            )
+    except Exception:
+        logger.exception("Could not process favorite action")
+        message = (
+            "⚠️ No pude actualizar tus favoritas ahora. Inténtalo de nuevo."
+            if spanish else
+            "⚠️ Couldn't update favorites right now. Please try again."
+        )
+    send_text_message(to=sender, message=message)
+
+
+def save_recent_if_premium(
+    sender: str, stations: tuple[FavoriteStation, ...]
+) -> bool:
+    if not subscription_service.can_use_feature(sender, Feature.FAVORITES):
+        return False
+    favorites_store.record_results(sender, stations)
+    return True
+
 def handle_text_message(incoming_message: IncomingMessage) -> None:
     process_text_message(
         incoming_message,
@@ -222,6 +337,7 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         ensure_started=conversation_transitions.ensure_started,
         apply_decision=apply_search_flow_decision,
         show_plan=handle_plan_status,
+        show_favorite=handle_favorite_action,
     )
 
 
@@ -235,6 +351,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         dispatch_state_interactive=interactive_state_router.dispatch,
         send_expected=send_expected_prompt,
         show_plan=handle_plan_status,
+        show_favorite=handle_favorite_action,
     )
 
 
@@ -263,11 +380,14 @@ def search_from_location(
         incoming_message,
         session,
         allow_search=search_rate_limiter.allow,
-        search=location_search_service.search,
+        search=lambda **kwargs: location_search_service.search(
+            **kwargs, capture_results=True
+        ),
         send_text=send_text_message,
         update_session=conversation_transitions.apply,
         send_prompt=send_prompt,
         save_preferences=save_search_preferences,
+        save_recent=save_recent_if_premium,
     )
 
 
