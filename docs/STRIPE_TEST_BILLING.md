@@ -157,3 +157,23 @@ to a canceled subscription: use another user you control, or perform a
 separately reviewed cleanup of *test-only* subscription tables before an
 additional end-to-end sandbox checkout. The automated Premium/Free/canceled
 favorites tests never require real charges or new Google API requests.
+
+
+## WhatsApp home and language preference
+
+The first explicit English/Español selection is saved immediately in a
+separate PostgreSQL `user_language_preferences` table using a SHA-256 hash
+of the WhatsApp sender ID. This is independent of the expiring conversation
+session and does **not** require completing a gas-station search. Existing
+search preference profiles and active chats are migrated when read.
+
+After selecting a language, the user sees one localized home menu with
+**Find gas stations**, **My favorites**, **My plan**, and **Change language**.
+A returning user's greeting or `menu` opens that menu without asking for the
+language again. The explicit Change language option (also available via
+`cambiar idioma` or `change language`) displays the language selection
+buttons and saves the new choice after selection. Back from the fuel screen
+returns to home. My favorites always checks the current server-side Premium
+entitlement, and basic station searching stays free. Singular requests like
+`mi favorita` / `my favorite` are accepted as synonyms for the list.
+No new Places or Routes API requests are made by language or menu actions.
