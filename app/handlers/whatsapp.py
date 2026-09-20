@@ -1,21 +1,19 @@
 import logging
 
-from app.constants import MAX_DISTANCE_MILES, MIN_DISTANCE_MILES
 from app.conversation import (
     ConversationSession,
     ConversationState,
     ConversationTransitions,
     NavigationAction,
     SearchFlowDecision,
-    SearchFlowPrompt,
     decide_search_flow,
     parse_navigation_action,
 )
 from app.conversation.options import LANGUAGE_BUTTONS
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.location_results import run_location_search
+from app.handlers.search_flow_delivery import deliver_search_flow_decision
 from app.handlers.webhook_dispatch import process_webhook
-from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
@@ -168,35 +166,16 @@ def apply_search_flow_decision(
     sender: str,
     decision: SearchFlowDecision,
 ) -> None:
-    if decision.prompt == SearchFlowPrompt.INVALID_DISTANCE:
-        try:
-            send_text_message(
-                to=sender,
-                message=t(
-                    decision.language,
-                    "invalid_max_distance",
-                    minimum=MIN_DISTANCE_MILES,
-                    maximum=MAX_DISTANCE_MILES,
-                ),
-            )
-        except WhatsAppServiceError as exc:
-            logger.warning("Could not send distance validation message: %s", exc)
-        return
-
-    session = conversation_transitions.apply(
+    deliver_search_flow_decision(
         sender,
-        decision.session_changes,
+        decision,
+        apply_changes=conversation_transitions.apply,
+        send_text=send_text_message,
+        send_fuel=send_fuel_prompt,
+        send_sort=send_sort_prompt,
+        send_distance=send_distance_prompt,
+        send_location=send_location_prompt,
     )
-
-    if decision.prompt == SearchFlowPrompt.FUEL:
-        send_fuel_prompt(sender, decision.language)
-    elif decision.prompt == SearchFlowPrompt.SORT:
-        send_sort_prompt(sender, session, selected=decision.selected)
-    elif decision.prompt == SearchFlowPrompt.DISTANCE:
-        send_distance_prompt(sender, session)
-    elif decision.prompt == SearchFlowPrompt.LOCATION:
-        send_location_prompt(sender, session, saved=decision.saved)
-
 
 def handle_text_message(incoming_message: IncomingMessage) -> None:
     sender = incoming_message.sender
