@@ -249,6 +249,16 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
     ):
         return
 
+    # While waiting for a location, unrelated text must not silently
+    # overwrite the search preferences. Navigation and greetings were
+    # already handled above.
+    if (
+        current_session is not None
+        and current_session.state == ConversationState.WAITING_LOCATION
+    ):
+        send_expected_prompt(sender, current_session)
+        return
+
     interpretation = intent_interpreter.interpret(text)
     if interpretation.intent != IntentType.SEARCH_GAS:
         session = conversation_transitions.ensure_started(sender)
@@ -271,15 +281,21 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         handle_navigation(sender, navigation_action)
         return
 
+    session = conversation_transitions.ensure_started(sender)
+
     if button_id in LANGUAGE_BUTTONS:
+        # Old interactive messages can still be tapped in WhatsApp.
+        # Accept a language choice only at the language-selection step.
+        if session.state != ConversationState.WAITING_LANGUAGE:
+            send_expected_prompt(sender, session)
+            return
+
         conversation_state_handlers.language_selection(
             sender,
             LANGUAGE_BUTTONS[button_id],
             display_name=incoming_message.profile_name,
         )
         return
-
-    session = conversation_transitions.ensure_started(sender)
 
     if not interactive_state_router.dispatch(incoming_message, session):
         send_expected_prompt(sender, session)
