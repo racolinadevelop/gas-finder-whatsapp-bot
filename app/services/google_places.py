@@ -2,7 +2,7 @@ import logging
 
 import httpx
 
-from app.config import GOOGLE_MAPS_API_KEY
+from app.config import GOOGLE_MAPS_API_KEY, GOOGLE_TEXT_MAX_PAGES
 from app.providers import GasStationProviderError
 from app.utils.distance import calculate_distance_miles
 from app.utils.cost import calculate_estimated_cost
@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 GOOGLE_PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
 GOOGLE_CANDIDATE_LIMIT = 20
 GOOGLE_TEXT_PAGE_SIZE = 20
-GOOGLE_TEXT_MAX_PAGES = 3
 METERS_PER_MILE = 1609.344
 
 

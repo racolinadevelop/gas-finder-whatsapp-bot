@@ -99,6 +99,8 @@ def test_google_text_search_follows_page_tokens_and_finds_later_candidates(
         return responses[len(calls) - 1]
 
     monkeypatch.setattr("app.services.google_places.httpx.post", fake_post)
+    # Explicit exhaustive mode preserves the original later-page regression.
+    monkeypatch.setattr("app.services.google_places.GOOGLE_TEXT_MAX_PAGES", 3)
 
     result = search_nearby_gas_stations(
         latitude=38.25,
@@ -163,3 +165,55 @@ def test_google_text_search_keeps_results_inside_requested_radius(monkeypatch):
 
     assert result["count"] == 1
     assert result["stations"][0]["name"] == "Nearby Station"
+
+
+def test_budget_mode_stops_after_two_pages_even_if_more_are_offered(monkeypatch):
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(json.copy())
+        return FakeGoogleTextResponse(
+            [google_place(
+                str(len(calls)), "Station " + str(len(calls)),
+                str(len(calls)) + " Main St", 38.25, -85.75,
+                3.00 + len(calls) / 10,
+            )],
+            next_page_token="more-" + str(len(calls)),
+        )
+
+    monkeypatch.setattr("app.services.google_places.httpx.post", fake_post)
+    monkeypatch.setattr("app.services.google_places.GOOGLE_TEXT_MAX_PAGES", 2)
+
+    result = search_nearby_gas_stations(
+        latitude=38.25,
+        longitude=-85.75,
+        radius=5000,
+        fuel_type="regular",
+        sort="price",
+        limit=5,
+    )
+
+    assert len(calls) == 2
+    assert "pageToken" not in calls[0]
+    assert calls[1]["pageToken"] == "more-1"
+    assert result["count"] == 2
+
+
+def test_strict_budget_can_use_one_page(monkeypatch):
+    calls = []
+
+    def fake_post(url, headers, json, timeout):
+        calls.append(json)
+        return FakeGoogleTextResponse(
+            [google_place("one", "One", "1 Main St", 38.25, -85.75, 3.0)],
+            next_page_token="unused",
+        )
+
+    monkeypatch.setattr("app.services.google_places.httpx.post", fake_post)
+    monkeypatch.setattr("app.services.google_places.GOOGLE_TEXT_MAX_PAGES", 1)
+
+    result = search_nearby_gas_stations(
+        latitude=38.25, longitude=-85.75, fuel_type="regular",
+    )
+    assert result["count"] == 1
+    assert len(calls) == 1

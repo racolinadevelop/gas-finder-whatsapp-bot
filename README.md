@@ -53,6 +53,11 @@ boundaries, preserved behaviors, automated tests and the live smoke-test checkli
   - Premium
   - Diesel
 - Calculate approximate distance in miles
+- Offer Google Maps driving-direction links in WhatsApp without extra API calls
+- Optionally show driving distance and approximate ETA from a capped, explicitly
+  enabled Routes API matrix request (separately billable)
+- Cap Google Places search pagination at two requests by default; one or three
+  pages may be selected to control cost vs. search coverage
 - Sort gas stations by:
   - Distance
   - Price
@@ -203,6 +208,14 @@ WHATSAPP_DEDUP_TTL_SECONDS=86400
 SEARCH_RATE_LIMIT_MAX=10
 SEARCH_RATE_LIMIT_WINDOW_SECONDS=300
 
+# Google Places Text Search request budget: 1–3 pages, default 2.
+GOOGLE_TEXT_MAX_PAGES=2
+
+# Separate paid Routes API: opt in only after enabling the service in Google
+# Cloud and reviewing matrix-element billing; does not affect Maps URLs.
+ROUTES_API_ENABLED=false
+ROUTES_MAX_DESTINATIONS=5
+
 # Optional locally; use Railway PostgreSQL in production for subscriptions.
 DATABASE_URL=
 ```
@@ -212,7 +225,8 @@ Never commit `.env`.
 ### Gas-station data provider
 
 Google remains the default provider. It uses Places Text Search with up to
-three pages of 20 candidates each, enforces the requested radius locally,
+two pages of 20 candidates each by default (configurable from one to three
+pages), enforces the requested radius locally,
 removes duplicate addresses and stations without a selected-fuel price, then
 sorts and displays the requested number of results. Explicitly closed or
 non-operational Google stations are excluded; stations with unknown hours
@@ -434,6 +448,10 @@ Architecture, module responsibilities and post-deployment smoke tests:
 
 [Architecture and Refactor Closeout](docs/ARCHITECTURE.md)
 
+Google request budgets, paid route opt-in and billing safeguards:
+
+[API Costs and Routes](docs/API_COSTS_AND_ROUTES.md)
+
 Gas station providers and operating-hours behavior:
 
 [Gas Station Providers](docs/GAS_STATION_PROVIDERS.md)
@@ -513,8 +531,14 @@ PostgreSQL-ready persistent subscription state ✅
 
 ## Current Limitations
 
-- Distance is currently geographic straight-line distance, not road travel
-  distance or an ETA; navigation links are not in the WhatsApp results yet.
+- Search radius and "best" rankings still use straight-line distance and the
+  original estimated cost. WhatsApp navigation links are available without
+  extra server-side requests; road miles and approximate ETA appear only if
+  the separately billed Google Routes API is explicitly enabled. Traffic is
+  not included and a driving route can exceed the selected straight-line radius.
+- The two-page Google Places default can omit stations and lower prices found
+  on a third page. Set `GOOGLE_TEXT_MAX_PAGES=3` for more coverage, or `=1`
+  for a stricter request budget.
 - A user can select search preferences in the active guided flow, but the bot
   does not yet persist preferred fuel or radius as a separate user profile.
   A user sharing location without an existing session uses default values.
@@ -535,7 +559,9 @@ Next product stages, in planned order:
 
 1. Complete post-refactor automated regression checks and the live WhatsApp
    smoke test after deployment.
-2. Add road-driving distance, travel ETA and station navigation links.
+2. Optionally activate and verify capped road-distance and ETA enrichment
+   after enabling Google Routes API; navigation links already work without it.
+   Later, update ranking and estimated cost to use driving distances safely.
 3. Clarify fuel-price update timestamps and stale-price warnings.
 4. Save user-level fuel/radius preferences separately from active conversations.
 5. Connect Stripe subscriptions in test mode: individual checkout links,

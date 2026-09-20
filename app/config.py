@@ -66,6 +66,21 @@ SEARCH_RATE_LIMIT_WINDOW_SECONDS = positive_int_setting(
     5 * 60,
 )
 
+# Places Text Search may return up to three pages. Default to at most two
+# to control request volume; set to 3 to search more exhaustively.
+GOOGLE_TEXT_MAX_PAGES = positive_int_setting("GOOGLE_TEXT_MAX_PAGES", 2)
+if GOOGLE_TEXT_MAX_PAGES > 3:
+    raise RuntimeError("GOOGLE_TEXT_MAX_PAGES must be between 1 and 3")
+
+# Routes API is separately billable (matrix elements = destinations).
+# Never enable extra API requests without an explicit opt-in.
+ROUTES_API_ENABLED = os.getenv("ROUTES_API_ENABLED", "false").lower() in {
+    "1", "true", "yes",
+}
+ROUTES_MAX_DESTINATIONS = positive_int_setting("ROUTES_MAX_DESTINATIONS", 5)
+if ROUTES_MAX_DESTINATIONS > 5:
+    raise RuntimeError("ROUTES_MAX_DESTINATIONS must be between 1 and 5")
+
 if GAS_STATION_PROVIDER not in {"google", "here"}:
     raise RuntimeError("GAS_STATION_PROVIDER must be 'google' or 'here'")
 

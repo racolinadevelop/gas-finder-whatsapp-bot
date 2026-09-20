@@ -142,7 +142,9 @@ TRANSLATIONS = {
         "top_result_best": "⭐ Best overall option",
 
         "station_price": "⛽ {fuel}: {price}",
-        "station_distance": "📍 Distance: {distance:.2f} mi",
+        "station_distance": "📍 Distance (straight line): {distance:.2f} mi",
+        "station_road_distance": "🚗 Driving distance: {distance:.2f} mi · approx. {minutes} min",
+        "station_directions": "🗺️ Driving directions: {url}",
         "station_open_now": "🟢 Open now (according to Google)",
         "station_hours_unknown": "⚪ Opening hours unavailable — check before visiting",
         "station_address": "🏠 {address}",
@@ -337,7 +339,9 @@ TRANSLATIONS = {
         "top_result_best": "⭐ Mejor opción general",
 
         "station_price": "⛽ {fuel}: {price}",
-        "station_distance": "📍 Distancia: {distance:.2f} mi",
+        "station_distance": "📍 Distancia: {distance:.2f} mi (en línea recta)",
+        "station_road_distance": "🚗 Por carretera: {distance:.2f} mi · aprox. {minutes} min",
+        "station_directions": "🗺️ Cómo llegar: {url}",
         "station_open_now": "🟢 Abierta ahora (según Google)",
         "station_hours_unknown": "⚪ Horario no disponible — comprueba antes de ir",
         "station_address": "🏠 {address}",
