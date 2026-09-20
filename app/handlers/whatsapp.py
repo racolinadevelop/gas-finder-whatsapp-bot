@@ -28,6 +28,7 @@ from app.intelligence import build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
 from app.preferences import SearchPreferences
+from app.preferences.language import InMemoryLanguageStore, PostgresLanguageStore
 from app.presentation import (
     Prompt,
     build_distance_prompt,
@@ -55,6 +56,9 @@ logger = logging.getLogger(__name__)
 runtime_state = build_runtime_state()
 conversation_store = runtime_state.conversation_store
 search_preferences_store = runtime_state.search_preferences_store
+user_language_store = (
+    PostgresLanguageStore(DATABASE_URL) if DATABASE_URL else InMemoryLanguageStore()
+)
 intent_interpreter = build_intent_interpreter()
 test_billing_store = (
     PostgresTestBillingStore(DATABASE_URL)
@@ -92,9 +96,34 @@ def send_prompt(sender: str, prompt: Prompt) -> None:
         logger.warning("Could not send conversation prompt: %s", exc)
 
 
+def load_saved_language(sender: str) -> str | None:
+    """Explicit choice survives session expiry; migrate old search profiles."""
+    try:
+        saved = user_language_store.get(sender)
+        if saved in {"es", "en"}:
+            return saved
+        profile = search_preferences_store.get(sender)
+        if profile is not None and profile.language in {"es", "en"}:
+            user_language_store.save(sender, profile.language)
+            return profile.language
+    except Exception:
+        logger.warning("Could not retrieve saved language preference")
+    return None
+
+
+def save_selected_language(sender: str, language: str) -> bool:
+    try:
+        user_language_store.save(sender, language)
+        return True
+    except Exception:
+        logger.warning("Could not save language preference")
+        return False
+
+
 conversation_state_handlers = ConversationStateHandlers(
     conversation_transitions,
     send_prompt,
+    save_language=save_selected_language,
 )
 
 
@@ -165,8 +194,50 @@ def send_expected_prompt(sender: str, session: ConversationSession) -> None:
 
 
 def handle_navigation(sender: str, action: NavigationAction) -> None:
+    if action == NavigationAction.CHANGE_LANGUAGE:
+        session = conversation_transitions.show_language_selection(sender)
+        send_state_prompt(sender, session)
+        return
+
+    if action == NavigationAction.MENU:
+        existing = conversation_store.get(sender)
+        saved = load_saved_language(sender)
+        if saved is None and existing is not None and existing.state not in {
+            ConversationState.NEW, ConversationState.WAITING_LANGUAGE
+        }:
+            saved = existing.language
+        if saved is None:
+            session = conversation_transitions.begin(sender)
+        else:
+            session = conversation_transitions.resume(sender, saved)
+        send_state_prompt(sender, session)
+        return
+
+    current = conversation_store.get(sender)
+    if current is not None and current.state == ConversationState.WAITING_LANGUAGE:
+        # Back cannot silently undo a first-time language choice.
+        send_state_prompt(sender, current)
+        return
     session = conversation_transitions.navigate(sender, action)
     send_state_prompt(sender, session)
+
+
+def begin_or_resume(sender: str, profile_name: str | None = None) -> ConversationSession:
+    current = conversation_store.get(sender)
+    if current is not None and current.state == ConversationState.WAITING_LANGUAGE:
+        return conversation_transitions.begin(sender, profile_name=profile_name)
+    saved = load_saved_language(sender)
+    if saved:
+        return conversation_transitions.resume(sender, saved, profile_name=profile_name)
+    return conversation_transitions.begin(sender, profile_name=profile_name)
+
+
+def send_entry_prompt(sender: str, display_name: str | None = None) -> None:
+    session = conversation_store.get(sender)
+    if session is None:
+        send_language_prompt(sender, display_name=display_name)
+    else:
+        send_state_prompt(sender, session)
 
 
 def handle_whatsapp_webhook(payload: dict) -> dict:
@@ -346,8 +417,8 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
     process_text_message(
         incoming_message,
         navigate=handle_navigation,
-        begin=conversation_transitions.begin,
-        send_language=send_language_prompt,
+        begin=begin_or_resume,
+        send_language=send_entry_prompt,
         get_session=conversation_store.get,
         dispatch_state_text=text_state_router.dispatch,
         send_expected=send_expected_prompt,
@@ -385,7 +456,17 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
 
 def load_search_preferences(sender: str) -> SearchPreferences | None:
     try:
-        return search_preferences_store.get(sender)
+        profile = search_preferences_store.get(sender)
+        language = load_saved_language(sender)
+        if profile is not None and language and profile.language != language:
+            from dataclasses import replace
+            return replace(profile, language=language)
+        if profile is None and language:
+            return SearchPreferences(
+                language=language, fuel_type="regular",
+                sort="best", max_distance_miles=None,
+            )
+        return profile
     except Exception:
         # Profile persistence is optional enrichment, not a reason to stop gas searches.
         logger.warning("Could not load search preferences")
