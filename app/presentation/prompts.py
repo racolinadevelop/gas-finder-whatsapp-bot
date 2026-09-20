@@ -264,6 +264,16 @@ def build_location_prompt(
     return TextPrompt(message=message)
 
 
+def build_results_navigation_prompt(language: str) -> ReplyButtonsPrompt:
+    return ReplyButtonsPrompt(
+        body_text=t(language, "results_next_step"),
+        buttons=[
+            {"id": "nav_back", "title": t(language, "button_nav_back")},
+            {"id": "nav_menu", "title": t(language, "button_nav_menu")},
+        ],
+    )
+
+
 def build_state_prompt(
     session: ConversationSession,
     error: bool = False,
@@ -272,7 +282,10 @@ def build_state_prompt(
         ConversationState.NEW,
         ConversationState.WAITING_LANGUAGE,
     }:
-        return build_language_prompt(error=error)
+        return build_language_prompt(
+            error=error,
+            display_name=session.profile_name,
+        )
     if session.state == ConversationState.WAITING_FUEL:
         return build_fuel_prompt(session.language, error=error)
     if session.state == ConversationState.WAITING_SORT:
@@ -281,5 +294,7 @@ def build_state_prompt(
         return build_distance_prompt(session, error=error)
     if session.state == ConversationState.WAITING_CUSTOM_DISTANCE:
         return build_custom_distance_prompt(session.language, error=error)
+    if session.state == ConversationState.WAITING_RESULTS:
+        return build_results_navigation_prompt(session.language)
 
     return build_location_prompt(session)

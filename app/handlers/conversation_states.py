@@ -44,7 +44,9 @@ class ConversationStateHandlers:
         language: str,
         display_name: str | None = None,
     ) -> None:
-        self._transitions.select_language(sender, language)
+        self._transitions.select_language(
+            sender, language, profile_name=display_name
+        )
         self._send_prompt(
             sender,
             build_fuel_prompt(

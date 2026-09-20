@@ -125,3 +125,21 @@ def test_state_prompt_selects_prompt_type_for_current_state():
 
     assert isinstance(prompt, TextPrompt)
     assert "couldn't recognize that distance" in prompt.message.casefold()
+
+
+def test_results_navigation_prompt_uses_whatsapp_reply_buttons():
+    prompt = build_state_prompt(
+        ConversationSession(
+            sender="sender",
+            state=ConversationState.WAITING_RESULTS,
+            language="es",
+        )
+    )
+
+    assert isinstance(prompt, ReplyButtonsPrompt)
+    assert [button["id"] for button in prompt.buttons] == [
+        "nav_back", "nav_menu",
+    ]
+    assert [button["title"] for button in prompt.buttons] == [
+        "⬅️ Atrás", "🏠 Menú",
+    ]

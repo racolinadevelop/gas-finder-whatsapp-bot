@@ -26,6 +26,7 @@ from app.presentation import (
     build_fuel_prompt,
     build_language_prompt,
     build_location_prompt,
+    build_results_navigation_prompt,
     build_sort_prompt,
     build_state_prompt,
 )
@@ -233,7 +234,10 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         return
 
     if normalized_text in GREETINGS:
-        conversation_transitions.begin(sender)
+        conversation_transitions.begin(
+            sender,
+            profile_name=incoming_message.profile_name,
+        )
 
         send_language_prompt(
             sender,
@@ -354,7 +358,12 @@ def search_from_location(
         logger.warning("Unable to send WhatsApp reply: %s", exc)
         return
 
-    conversation_transitions.finish(sender)
+    # Retain preferences after results so Back can request another location.
+    conversation_transitions.apply(
+        sender,
+        {"state": ConversationState.WAITING_RESULTS},
+    )
+    send_prompt(sender, build_results_navigation_prompt(session.language))
 
 
 def handle_location_message(incoming_message: IncomingMessage) -> None:

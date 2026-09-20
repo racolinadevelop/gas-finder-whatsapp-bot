@@ -202,3 +202,33 @@ def test_runtime_uses_and_checks_redis_when_configured():
     assert isinstance(state.message_deduplicator, RedisMessageDeduplicator)
     assert isinstance(state.search_rate_limiter, RedisSearchRateLimiter)
     assert client.ping_count == 1
+
+
+def test_redis_conversation_store_keeps_profile_name_and_reads_old_sessions():
+    import json
+
+    client = FakeRedis()
+    store = RedisConversationStore(client, key_prefix="test")
+    store.update(
+        "named-sender",
+        state=ConversationState.WAITING_RESULTS,
+        profile_name="Ramon",
+        fuel_type="premium",
+    )
+    reopened = RedisConversationStore(client, key_prefix="test")
+    assert reopened.get("named-sender").profile_name == "Ramon"
+    assert reopened.get("named-sender").state == ConversationState.WAITING_RESULTS
+
+    client.set(
+        store._key("older-sender"),
+        json.dumps({
+            "sender": "older-sender",
+            "state": "waiting_location",
+            "language": "es",
+            "fuel_type": "diesel",
+            "sort": "price",
+            "max_distance_miles": 3,
+        }),
+    )
+    assert reopened.get("older-sender").profile_name is None
+    assert reopened.get("older-sender").state == ConversationState.WAITING_LOCATION

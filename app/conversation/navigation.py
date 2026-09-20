@@ -43,6 +43,7 @@ PREVIOUS_STATES = {
         ConversationState.WAITING_DISTANCE
     ),
     ConversationState.WAITING_LOCATION: ConversationState.WAITING_DISTANCE,
+    ConversationState.WAITING_RESULTS: ConversationState.WAITING_LOCATION,
 }
 
 

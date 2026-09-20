@@ -26,6 +26,9 @@ def test_get_previous_state_moves_back_one_step():
     assert get_previous_state(ConversationState.WAITING_LOCATION) == (
         ConversationState.WAITING_DISTANCE
     )
+    assert get_previous_state(ConversationState.WAITING_RESULTS) == (
+        ConversationState.WAITING_LOCATION
+    )
     assert get_previous_state(ConversationState.WAITING_CUSTOM_DISTANCE) == (
         ConversationState.WAITING_DISTANCE
     )

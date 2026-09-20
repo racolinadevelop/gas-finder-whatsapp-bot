@@ -320,7 +320,7 @@ def build_gas_stations_reply(
                     distance=max_distance_miles,
                 )
             )
-        lines.append(t(language, "navigation_hint"))
+        lines.append(t(language, "results_navigation_hint"))
         return "\n\n".join(lines)
 
     displayed_count = min(len(stations), 5)
@@ -411,7 +411,7 @@ def build_gas_stations_reply(
     lines.extend(
         [
             "━━━━━━━━━━━━━━",
-            t(language, "navigation_hint"),
+            t(language, "results_navigation_hint"),
         ]
     )
 

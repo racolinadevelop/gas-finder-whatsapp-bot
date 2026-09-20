@@ -289,7 +289,9 @@ def test_location_passes_saved_session_to_search_service(monkeypatch):
     assert search_call["session"].max_distance_miles == 3
     assert search_call["latitude"] == 38.2527
     assert search_call["longitude"] == -85.7585
-    assert whatsapp_handler.conversation_store.get(sender) is None
+    assert whatsapp_handler.conversation_store.get(sender).state == (
+        ConversationState.WAITING_RESULTS
+    )
     monkeypatch.setattr(
         whatsapp_handler,
         "send_text_message",
