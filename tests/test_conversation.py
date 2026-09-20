@@ -312,6 +312,7 @@ def test_location_passes_saved_session_to_search_service(monkeypatch):
         language="en",
         fuel_type="premium",
         sort="distance",
+        max_distance_miles=3,
     )
 
     whatsapp_handler.conversation_store.clear()
