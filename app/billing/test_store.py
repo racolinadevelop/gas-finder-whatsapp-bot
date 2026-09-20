@@ -238,3 +238,53 @@ class PostgresTestBillingStore:
                     (hashed, customer_id, subscription_id, status),
                 )
         return True
+
+    def reset_canceled_user(
+        self,
+        whatsapp_id: str,
+        *,
+        customer_id: str,
+        subscription_id: str,
+    ) -> bool:
+        """Forget a verified canceled TEST linkage so an admin can test again.
+
+        Only sandbox Checkout and entitlement rows are deleted. This never
+        touches language preferences, favorites, normal plans or event receipts.
+        The locked row + expected IDs prevent racing a new active subscription.
+        Subsequent events for forgotten old sessions are ignored as unbound.
+        """
+        hashed = user_hash(whatsapp_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT customer_id, subscription_id, status
+                    FROM stripe_test_entitlements
+                    WHERE whatsapp_id_hash = %s
+                    FOR UPDATE
+                    """,
+                    (hashed,),
+                )
+                row = cur.fetchone()
+                if row != (customer_id, subscription_id, "canceled"):
+                    raise TestBillingStoreError(
+                        "Test subscription changed or is not canceled"
+                    )
+                cur.execute(
+                    """
+                    DELETE FROM stripe_test_checkouts
+                    WHERE whatsapp_id_hash = %s
+                    """,
+                    (hashed,),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM stripe_test_entitlements
+                    WHERE whatsapp_id_hash = %s
+                    AND customer_id = %s
+                    AND subscription_id = %s
+                    AND status = 'canceled'
+                    """,
+                    (hashed, customer_id, subscription_id),
+                )
+        return True
