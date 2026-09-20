@@ -13,6 +13,12 @@ TRANSLATIONS = {
             "Para continuar, por favor selecciona tu idioma preferido."
         ),
 
+        "choose_language_again": (
+            "🌐 Please choose your preferred language.\n"
+            "Por favor, selecciona tu idioma preferido."
+        ),
+        "navigation_buttons_prompt": "↩️ Navigation options",
+
         "invalid_language": (
             "I couldn't use that response. Please choose English or Español "
             "using one of the buttons below."
@@ -195,6 +201,12 @@ TRANSLATIONS = {
             "👋 ¡Hola, {name}! Bienvenido a Gas Finder.\n"
             "Para continuar, por favor selecciona tu idioma preferido."
         ),
+
+        "choose_language_again": (
+            "🌐 Please choose your preferred language.\n"
+            "Por favor, selecciona tu idioma preferido."
+        ),
+        "navigation_buttons_prompt": "↩️ Opciones de navegación",
 
         "invalid_language": (
             "No pude usar esa respuesta. Selecciona English o Español usando "

@@ -59,7 +59,7 @@ def test_back_after_results_requests_new_location_with_same_preferences(
     assert "esperando tu ubicación" in sent[0]["message"].lower()
 
 
-def test_menu_button_after_results_starts_over_with_personalized_greeting(
+def test_menu_button_after_results_starts_over_without_repeating_greeting(
     monkeypatch,
 ):
     completed_search()
@@ -84,7 +84,8 @@ def test_menu_button_after_results_starts_over_with_personalized_greeting(
             profile_name="Ramon",
         )
     )
-    assert "Ramon" in sent[0]["body_text"]
+    assert "Ramon" not in sent[0]["body_text"]
+    assert "choose your preferred language" in sent[0]["body_text"]
     assert [button["id"] for button in sent[0]["buttons"]] == [
         "lang_en", "lang_es",
     ]
@@ -190,4 +191,7 @@ def test_name_from_initial_greeting_is_retained_for_menu(monkeypatch):
             text="menú",
         )
     )
-    assert "Ramon" in sent[-1]["body_text"]
+    assert "Ramon" in sent[0]["body_text"]
+    assert "Ramon" not in sent[-1]["body_text"]
+    assert "choose your preferred language" in sent[-1]["body_text"]
+    assert whatsapp_handler.conversation_store.get(SENDER).profile_name == "Ramon"

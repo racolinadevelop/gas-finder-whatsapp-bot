@@ -143,3 +143,25 @@ def test_results_navigation_prompt_uses_whatsapp_reply_buttons():
     assert [button["title"] for button in prompt.buttons] == [
         "⬅️ Atrás", "🏠 Menú",
     ]
+
+
+def test_returning_to_language_selection_does_not_repeat_welcome():
+    prompt = build_state_prompt(
+        ConversationSession(
+            sender="sender",
+            state=ConversationState.WAITING_LANGUAGE,
+            profile_name="Ramon",
+        )
+    )
+
+    assert isinstance(prompt, ReplyButtonsPrompt)
+    assert "choose your preferred language" in prompt.body_text
+    assert "Welcome" not in prompt.body_text
+    assert "Ramon" not in prompt.body_text
+
+
+def test_initial_language_prompt_has_no_navigation_hint():
+    prompt = build_language_prompt(display_name="Ramon")
+    assert "Hi, Ramon!" in prompt.body_text
+    assert "back" not in prompt.body_text.lower()
+    assert "menu" not in prompt.body_text.lower()

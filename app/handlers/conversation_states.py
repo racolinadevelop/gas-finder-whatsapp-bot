@@ -51,8 +51,6 @@ class ConversationStateHandlers:
             sender,
             build_fuel_prompt(
                 language,
-                welcome=True,
-                display_name=display_name,
             ),
         )
 
