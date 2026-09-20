@@ -39,6 +39,11 @@ def test_shown_stations_mirror_five_visible_results_without_coordinates_or_price
 
 @pytest.mark.parametrize("text,expected", [
     ("mis favoritas", ("list", None)),
+    ("Mi favorita", ("list", None)),
+    ("MI   FAVORITA", ("list", None)),
+    ("mi favorito", ("list", None)),
+    ("my favorite", ("list", None)),
+    ("favorita", ("list", None)),
     ("MY FAVORITES", ("list", None)),
     ("Guardar 2", ("save", 2)),
     ("save favorite 5", ("save", 5)),
