@@ -35,11 +35,27 @@ class ConversationTransitions:
     def ensure_started(self, sender: str) -> ConversationSession:
         return self._store.get(sender) or self.begin(sender)
 
+    def show_language_selection(self, sender: str) -> ConversationSession:
+        return self._store.update(sender, state=ConversationState.WAITING_LANGUAGE)
+
+    def start_search(self, sender: str) -> ConversationSession:
+        return self._store.update(
+            sender, state=ConversationState.WAITING_FUEL,
+            fuel_type="regular", sort="best", max_distance_miles=None,
+        )
+
+    def resume(self, sender: str, language: str, profile_name: str | None = None) -> ConversationSession:
+        if language not in {"es", "en"}:
+            raise ValueError("Invalid saved language")
+        changes = {"state": ConversationState.MAIN_MENU, "language": language}
+        if profile_name:
+            changes["profile_name"] = profile_name
+        return self._store.update(sender, **changes)
+
     def reset(self, sender: str) -> ConversationSession:
         return self._store.update(
             sender,
-            state=ConversationState.WAITING_LANGUAGE,
-            language="en",
+            state=ConversationState.MAIN_MENU,
             fuel_type="regular",
             sort="best",
             max_distance_miles=None,
@@ -50,6 +66,8 @@ class ConversationTransitions:
         sender: str,
         action: NavigationAction,
     ) -> ConversationSession:
+        if action == NavigationAction.CHANGE_LANGUAGE:
+            return self.show_language_selection(sender)
         if action == NavigationAction.MENU:
             return self.reset(sender)
 
@@ -78,7 +96,7 @@ class ConversationTransitions:
         profile_name: str | None = None,
     ) -> ConversationSession:
         changes = {
-            "state": ConversationState.WAITING_FUEL,
+            "state": ConversationState.MAIN_MENU,
             "language": language,
             "fuel_type": "regular",
             "sort": "best",
