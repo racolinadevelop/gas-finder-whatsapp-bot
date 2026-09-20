@@ -39,6 +39,7 @@ def build_whatsapp_routers(
     )
     interactive_router = ConversationStateRouter(
         handlers={
+            ConversationState.MAIN_MENU: state_handlers.menu_interaction,
             ConversationState.WAITING_FUEL: state_handlers.fuel_interaction,
             ConversationState.WAITING_SORT: state_handlers.sort_interaction,
             ConversationState.WAITING_DISTANCE: state_handlers.distance_interaction,
