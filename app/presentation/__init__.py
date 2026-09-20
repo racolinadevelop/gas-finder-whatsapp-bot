@@ -25,6 +25,7 @@ __all__ = [
     "build_fuel_prompt",
     "build_language_prompt",
     "build_location_prompt",
+    "build_main_menu_prompt",
     "build_navigation_prompt",
     "build_results_navigation_prompt",
     "build_sort_prompt",
