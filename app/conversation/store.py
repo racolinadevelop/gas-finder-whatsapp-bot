@@ -113,6 +113,7 @@ class RedisConversationStore:
             fuel_type=data["fuel_type"],
             sort=data["sort"],
             max_distance_miles=data["max_distance_miles"],
+            profile_name=data.get("profile_name"),
         )
 
     def _write(self, session: ConversationSession) -> None:

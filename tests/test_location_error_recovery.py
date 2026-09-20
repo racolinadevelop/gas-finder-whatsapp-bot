@@ -27,7 +27,7 @@ def prepare_session(language="en"):
     return sender, session, message
 
 
-def test_session_is_removed_only_after_result_is_sent(monkeypatch):
+def test_session_is_preserved_after_result_and_navigation_is_offered(monkeypatch):
     sender, expected_session, message = prepare_session()
     events = []
 
@@ -50,16 +50,36 @@ def test_session_is_removed_only_after_result_is_sent(monkeypatch):
         "location_search_service",
         SuccessfulSearch(),
     )
+    def send_actions(**kwargs):
+        assert whatsapp_handler.conversation_store.get(sender).state == (
+            ConversationState.WAITING_RESULTS
+        )
+        assert [button["id"] for button in kwargs["buttons"]] == [
+            "nav_back",
+            "nav_menu",
+        ]
+        events.append("actions")
+
     monkeypatch.setattr(
         whatsapp_handler,
         "send_text_message",
         successful_send,
     )
+    monkeypatch.setattr(
+        whatsapp_handler,
+        "send_reply_buttons",
+        send_actions,
+    )
 
     whatsapp_handler.handle_location_message(message)
 
-    assert events == ["searched", "sent"]
-    assert whatsapp_handler.conversation_store.get(sender) is None
+    assert events == ["searched", "sent", "actions"]
+    assert whatsapp_handler.conversation_store.get(sender).state == (
+        ConversationState.WAITING_RESULTS
+    )
+    assert whatsapp_handler.conversation_store.get(sender).fuel_type == (
+        expected_session.fuel_type
+    )
 
 
 @pytest.mark.parametrize(

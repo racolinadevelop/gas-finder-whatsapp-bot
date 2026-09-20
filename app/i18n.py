@@ -111,6 +111,15 @@ TRANSLATIONS = {
         "results_title": (
             "⛽ Nearby gas stations"
         ),
+        "results_next_step": (
+            "↩️ Want to search again with the same preferences? "
+            "Choose Back to share another location, or Menu to start over."
+        ),
+        "results_navigation_hint": (
+            "↩️ Use the buttons below to search again or start over."
+        ),
+        "button_nav_back": "⬅️ Back",
+        "button_nav_menu": "🏠 Menu",
 
         "results_summary": (
             "🔎 Search details\n"
@@ -285,6 +294,15 @@ TRANSLATIONS = {
         "results_title": (
             "⛽ Gasolineras cercanas"
         ),
+        "results_next_step": (
+            "↩️ ¿Quieres volver a buscar con las mismas preferencias? "
+            "Pulsa Atrás para compartir otra ubicación o Menú para empezar de nuevo."
+        ),
+        "results_navigation_hint": (
+            "↩️ Usa los botones de abajo para repetir la búsqueda o empezar de nuevo."
+        ),
+        "button_nav_back": "⬅️ Atrás",
+        "button_nav_menu": "🏠 Menú",
 
         "results_summary": (
             "🔎 Detalles de búsqueda\n"

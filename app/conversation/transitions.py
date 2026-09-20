@@ -22,11 +22,15 @@ class ConversationTransitions:
     def __init__(self, store: ConversationStore) -> None:
         self._store = store
 
-    def begin(self, sender: str) -> ConversationSession:
-        return self._store.update(
-            sender,
-            state=ConversationState.WAITING_LANGUAGE,
-        )
+    def begin(
+        self,
+        sender: str,
+        profile_name: str | None = None,
+    ) -> ConversationSession:
+        changes = {"state": ConversationState.WAITING_LANGUAGE}
+        if profile_name:
+            changes["profile_name"] = profile_name
+        return self._store.update(sender, **changes)
 
     def ensure_started(self, sender: str) -> ConversationSession:
         return self._store.get(sender) or self.begin(sender)
@@ -71,15 +75,18 @@ class ConversationTransitions:
         self,
         sender: str,
         language: str,
+        profile_name: str | None = None,
     ) -> ConversationSession:
-        return self._store.update(
-            sender,
-            state=ConversationState.WAITING_FUEL,
-            language=language,
-            fuel_type="regular",
-            sort="best",
-            max_distance_miles=None,
-        )
+        changes = {
+            "state": ConversationState.WAITING_FUEL,
+            "language": language,
+            "fuel_type": "regular",
+            "sort": "best",
+            "max_distance_miles": None,
+        }
+        if profile_name:
+            changes["profile_name"] = profile_name
+        return self._store.update(sender, **changes)
 
     def select_fuel(
         self,

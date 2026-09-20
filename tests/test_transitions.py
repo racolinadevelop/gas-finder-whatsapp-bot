@@ -172,3 +172,41 @@ def test_finish_removes_and_returns_session():
 
     assert removed == expected
     assert store.get("sender") is None
+
+
+def test_results_back_returns_to_location_with_saved_preferences():
+    store, transitions = build_transitions()
+    store.update(
+        "sender",
+        state=ConversationState.WAITING_RESULTS,
+        language="es",
+        fuel_type="premium",
+        sort="price",
+        max_distance_miles=3,
+        profile_name="Ramon",
+    )
+    session = transitions.navigate("sender", NavigationAction.BACK)
+
+    assert session.state == ConversationState.WAITING_LOCATION
+    assert session.language == "es"
+    assert session.fuel_type == "premium"
+    assert session.sort == "price"
+    assert session.max_distance_miles == 3
+    assert session.profile_name == "Ramon"
+
+
+def test_menu_resets_preferences_but_keeps_display_name():
+    store, transitions = build_transitions()
+    store.update(
+        "sender",
+        state=ConversationState.WAITING_RESULTS,
+        profile_name="Ramon",
+        language="es",
+        fuel_type="diesel",
+    )
+    session = transitions.navigate("sender", NavigationAction.MENU)
+
+    assert session.state == ConversationState.WAITING_LANGUAGE
+    assert session.profile_name == "Ramon"
+    assert session.language == "en"
+    assert session.fuel_type == "regular"
