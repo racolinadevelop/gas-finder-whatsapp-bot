@@ -1,8 +1,8 @@
 """Isolated Stripe TEST-mode Checkout/Portal transport and signed webhook verifier.
 
-The verified webhook is observational in this stage: it MUST NOT change plans.
-Before enabling Premium entitlements, persist an authenticated checkout-to-user
-binding and handle subscription lifecycle events idempotently in PostgreSQL.
+Verified Stripe TEST webhooks can update the separate sandbox entitlement
+ledger only after a durable Checkout-to-user binding and paid-status validation.
+No live billing or general user subscription record is modified.
 """
 
 import hashlib
