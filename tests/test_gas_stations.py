@@ -1232,9 +1232,12 @@ def test_whatsapp_button_flow(monkeypatch):
         sort="best",
     )
 
-    assert sent_button_messages[1]["buttons"][0]["id"] == "sort_distance"
-    assert sent_button_messages[1]["buttons"][1]["id"] == "sort_price"
-    assert sent_button_messages[1]["buttons"][2]["id"] == "sort_best"
+    assert [button["id"] for button in sent_button_messages[1]["buttons"]] == [
+        "nav_back", "nav_menu",
+    ]
+    assert sent_button_messages[2]["buttons"][0]["id"] == "sort_distance"
+    assert sent_button_messages[2]["buttons"][1]["id"] == "sort_price"
+    assert sent_button_messages[2]["buttons"][2]["id"] == "sort_best"
 
     cheapest_payload = {
         "entry": [
@@ -1511,9 +1514,12 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
         sort="best",
     )
 
-    assert sent_button_messages[1]["buttons"][0]["title"] == "📍 Más cerca"
-    assert sent_button_messages[1]["buttons"][1]["title"] == "💵 Más barato"
-    assert sent_button_messages[1]["buttons"][2]["title"] == "⭐ Mejor opción"
+    assert [button["id"] for button in sent_button_messages[1]["buttons"]] == [
+        "nav_back", "nav_menu",
+    ]
+    assert sent_button_messages[2]["buttons"][0]["title"] == "📍 Más cerca"
+    assert sent_button_messages[2]["buttons"][1]["title"] == "💵 Más barato"
+    assert sent_button_messages[2]["buttons"][2]["title"] == "⭐ Mejor opción"
 
     # 3. Select Cheapest
     cheapest_payload = {
