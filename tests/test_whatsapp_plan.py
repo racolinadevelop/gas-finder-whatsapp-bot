@@ -39,7 +39,9 @@ def test_plan_summary_distinguishes_free_sandbox_real_and_cancelled():
     pending = build_plan_message("en", regular_premium=False, test_status="past_due")
     assert "plan: Free" in pending and "no active Premium" in pending
     bilingual = build_plan_message("both", regular_premium=False, test_status=None)
-    assert "plan: Free" in bilingual and "plan actual: Gratis" in bilingual
+    assert "Tu plan / Your plan:" in bilingual
+    assert "Gratis" in bilingual and "Free" in bilingual
+    assert len(bilingual) < 330  # Initial bilingual message fits a phone screen.
     for summary in [free, active, canceled, real, pending, bilingual]:
         assert "checkout.stripe.com" not in summary
 
