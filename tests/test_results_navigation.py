@@ -65,7 +65,7 @@ def test_menu_button_after_results_starts_over_without_repeating_greeting(
     completed_search()
     sent = []
     monkeypatch.setattr(
-        whatsapp_handler, "send_reply_buttons",
+        whatsapp_handler, "send_list_message",
         lambda **payload: sent.append(payload),
     )
 
@@ -77,18 +77,16 @@ def test_menu_button_after_results_starts_over_without_repeating_greeting(
         )
     )
 
-    assert whatsapp_handler.conversation_store.get(SENDER) == (
-        ConversationSession(
-            sender=SENDER,
-            state=ConversationState.WAITING_LANGUAGE,
-            profile_name="Ramon",
-        )
+    session = whatsapp_handler.conversation_store.get(SENDER)
+    assert session.state == ConversationState.MAIN_MENU
+    assert (session.language, session.fuel_type, session.sort) == (
+        "es", "premium", "price",
     )
-    assert "Ramon" not in sent[0]["body_text"]
-    assert "choose your preferred language" in sent[0]["body_text"]
-    assert [button["id"] for button in sent[0]["buttons"]] == [
-        "lang_en", "lang_es",
-    "account_plan",
+    assert session.max_distance_miles == 3
+    assert session.profile_name == "Ramon"
+    assert "Ramon" in sent[0]["body_text"]
+    assert [row["id"] for row in sent[0]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]
 
 
@@ -168,7 +166,11 @@ def test_name_from_initial_greeting_is_retained_for_menu(monkeypatch):
     sent = []
     monkeypatch.setattr(
         whatsapp_handler, "send_reply_buttons",
-        lambda **payload: sent.append(payload),
+        lambda **payload: sent.append(("buttons", payload)),
+    )
+    monkeypatch.setattr(
+        whatsapp_handler, "send_list_message",
+        lambda **payload: sent.append(("list", payload)),
     )
     whatsapp_handler.handle_text_message(
         IncomingMessage(
@@ -192,7 +194,11 @@ def test_name_from_initial_greeting_is_retained_for_menu(monkeypatch):
             text="menú",
         )
     )
-    assert "Ramon" in sent[0]["body_text"]
-    assert "Ramon" not in sent[-1]["body_text"]
-    assert "choose your preferred language" in sent[-1]["body_text"]
+    assert sent[0][0] == "buttons"
+    assert "Ramon" in sent[0][1]["body_text"]
+    assert sent[-1][0] == "list"
+    assert "Ramon" in sent[-1][1]["body_text"]
     assert whatsapp_handler.conversation_store.get(SENDER).profile_name == "Ramon"
+    assert whatsapp_handler.conversation_store.get(SENDER).state == (
+        ConversationState.MAIN_MENU
+    )

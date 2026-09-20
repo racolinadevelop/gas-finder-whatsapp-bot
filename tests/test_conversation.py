@@ -529,7 +529,7 @@ def test_menu_command_resets_session(monkeypatch):
     )
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent_messages.append(kwargs),
     )
 
@@ -543,15 +543,13 @@ def test_menu_command_resets_session(monkeypatch):
 
     assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
         sender=sender,
-        state=ConversationState.WAITING_LANGUAGE,
-        language="en",
-        fuel_type="regular",
-        sort="best",
+        state=ConversationState.MAIN_MENU,
+        language="es",
+        fuel_type="diesel",
+        sort="price",
     )
-    assert [button["id"] for button in sent_messages[0]["buttons"]] == [
-        "lang_en",
-        "lang_es",
-    "account_plan",
+    assert [row["id"] for row in sent_messages[0]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]
 
     whatsapp_handler.conversation_store.clear()

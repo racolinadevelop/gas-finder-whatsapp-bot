@@ -107,11 +107,10 @@ def test_language_button_works_at_language_selection(monkeypatch):
     )
 
     session = whatsapp_handler.conversation_store.get(SENDER)
-    assert session.state == ConversationState.WAITING_FUEL
+    assert session.state == ConversationState.MAIN_MENU
     assert session.language == "es"
     assert [row["id"] for row in sent[0]["rows"]] == [
-        "fuel_regular", "fuel_premium", "fuel_diesel",
-        "nav_back", "nav_menu",
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]
 
 
@@ -120,7 +119,7 @@ def test_menu_still_resets_flow_while_waiting_for_location(monkeypatch):
     sent = []
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_reply_buttons",
+        "send_list_message",
         lambda **kwargs: sent.append(kwargs),
     )
 
@@ -135,11 +134,13 @@ def test_menu_still_resets_flow_while_waiting_for_location(monkeypatch):
     assert whatsapp_handler.conversation_store.get(SENDER) == (
         ConversationSession(
             sender=SENDER,
-            state=ConversationState.WAITING_LANGUAGE,
+            state=ConversationState.MAIN_MENU,
+            language="es",
+            fuel_type="premium",
+            sort="price",
+            max_distance_miles=3,
         )
     )
-    assert [button["id"] for button in sent[0]["buttons"]] == [
-        "lang_en",
-        "lang_es",
-    "account_plan",
+    assert [row["id"] for row in sent[0]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]

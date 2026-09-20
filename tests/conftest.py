@@ -8,7 +8,9 @@ def clear_webhook_message_deduplicator():
     whatsapp_handler.message_deduplicator.clear()
     whatsapp_handler.search_rate_limiter.clear()
     whatsapp_handler.search_preferences_store.clear()
+    whatsapp_handler.user_language_store.clear()
     yield
     whatsapp_handler.message_deduplicator.clear()
     whatsapp_handler.search_rate_limiter.clear()
     whatsapp_handler.search_preferences_store.clear()
+    whatsapp_handler.user_language_store.clear()

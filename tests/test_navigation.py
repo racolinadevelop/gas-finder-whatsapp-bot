@@ -39,7 +39,7 @@ def test_get_previous_state_moves_back_one_step():
         ConversationState.WAITING_FUEL
     )
     assert get_previous_state(ConversationState.WAITING_FUEL) == (
-        ConversationState.WAITING_LANGUAGE
+        ConversationState.MAIN_MENU
     )
     assert get_previous_state(ConversationState.WAITING_LANGUAGE) == (
         ConversationState.WAITING_LANGUAGE

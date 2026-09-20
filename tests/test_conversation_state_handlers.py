@@ -28,10 +28,12 @@ def test_language_selection_shows_fuel_options_without_repeating_greeting():
         display_name="Ramon",
     )
 
-    assert store.get("sender").state == ConversationState.WAITING_FUEL
-    assert isinstance(sent[0][1], ReplyButtonsPrompt)
-    assert "¡Hola, Ramon!" not in sent[0][1].body_text
-    assert "Para comenzar" in sent[0][1].body_text
+    assert store.get("sender").state == ConversationState.MAIN_MENU
+    assert isinstance(sent[0][1], ListPrompt)
+    assert [row["id"] for row in sent[0][1].rows] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
+    ]
+    assert "Ramon" in sent[0][1].body_text
     assert store.get("sender").profile_name == "Ramon"
 
 

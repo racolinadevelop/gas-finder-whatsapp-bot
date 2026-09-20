@@ -5,6 +5,7 @@ from enum import StrEnum
 class ConversationState(StrEnum):
     NEW = "new"
     WAITING_LANGUAGE = "waiting_language"
+    MAIN_MENU = "main_menu"
     WAITING_FUEL = "waiting_fuel"
     WAITING_SORT = "waiting_sort"
     WAITING_DISTANCE = "waiting_distance"

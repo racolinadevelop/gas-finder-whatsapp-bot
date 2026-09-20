@@ -22,7 +22,7 @@ TRANSLATIONS = {
         "navigation_list_button": "Choose an option",
         "navigation_list_section": "Navigation",
         "nav_back_description": "Return to the previous step",
-        "nav_menu_description": "Start a new search",
+        "nav_menu_description": "Return to the main menu",
 
         "invalid_language": (
             "I couldn't use that response. Please choose English or Español "
@@ -228,7 +228,7 @@ TRANSLATIONS = {
         "navigation_list_button": "Elegir opción",
         "navigation_list_section": "Navegación",
         "nav_back_description": "Volver al paso anterior",
-        "nav_menu_description": "Comenzar una nueva búsqueda",
+        "nav_menu_description": "Volver al menú principal",
 
         "invalid_language": (
             "No pude usar esa respuesta. Selecciona English o Español usando "

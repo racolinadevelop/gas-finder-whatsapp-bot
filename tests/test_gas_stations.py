@@ -1187,6 +1187,16 @@ def test_whatsapp_button_flow(monkeypatch):
 
     assert response.status_code == 200
     assert whatsapp_handler.conversation_store.get(sender).state == (
+        ConversationState.MAIN_MENU
+    )
+    assert [row["id"] for row in sent_list_messages[0]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
+    ]
+    sent_list_messages.clear()
+    whatsapp_handler.handle_interactive_message(IncomingMessage(
+        sender=sender, message_type="interactive", selection_id="home_search",
+    ))
+    assert whatsapp_handler.conversation_store.get(sender).state == (
         ConversationState.WAITING_FUEL
     )
 
@@ -1456,6 +1466,16 @@ def test_whatsapp_spanish_button_flow(monkeypatch):
     )
 
     assert response.status_code == 200
+    assert whatsapp_handler.conversation_store.get(sender).state == (
+        ConversationState.MAIN_MENU
+    )
+    assert [row["id"] for row in sent_list_messages[0]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
+    ]
+    sent_list_messages.clear()
+    whatsapp_handler.handle_interactive_message(IncomingMessage(
+        sender=sender, message_type="interactive", selection_id="home_search",
+    ))
 
     assert whatsapp_handler.conversation_store.get(sender) == ConversationSession(
         sender=sender,

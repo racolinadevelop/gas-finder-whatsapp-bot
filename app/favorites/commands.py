@@ -16,7 +16,11 @@ def parse_favorite_action(
         return None
 
     normalized = " ".join((text or "").casefold().split())
-    if normalized in {"mis favoritas", "mis favoritos", "my favorites", "favoritas", "favorites"}:
+    if normalized in {
+        "mi favorita", "mi favorito", "mis favoritas", "mis favoritos",
+        "my favorite", "my favorites", "favorita", "favoritas",
+        "favorito", "favoritos", "favorite", "favorites",
+    }:
         return ("list", None)
     match = re.fullmatch(
         r"(?:guardar|save)(?:\s+(?:favorita|favorito|favorite))?\s+([1-5])",

@@ -20,6 +20,7 @@ from app.presentation import (
     build_distance_prompt,
     build_fuel_prompt,
     build_location_prompt,
+    build_main_menu_prompt,
     build_sort_prompt,
     build_state_prompt,
 )
@@ -34,9 +35,11 @@ class ConversationStateHandlers:
         self,
         transitions: ConversationTransitions,
         send_prompt: PromptSender,
+        save_language: Callable[[str, str], bool] | None = None,
     ) -> None:
         self._transitions = transitions
         self._send_prompt = send_prompt
+        self._save_language = save_language or (lambda sender, language: True)
 
     def language_selection(
         self,
@@ -44,15 +47,25 @@ class ConversationStateHandlers:
         language: str,
         display_name: str | None = None,
     ) -> None:
-        self._transitions.select_language(
+        if not self._save_language(sender, language):
+            from app.presentation.prompts import build_language_prompt
+            self._send_prompt(sender, build_language_prompt(error=True))
+            return
+        session = self._transitions.select_language(
             sender, language, profile_name=display_name
         )
         self._send_prompt(
-            sender,
-            build_fuel_prompt(
-                language,
-            ),
+            sender, build_main_menu_prompt(language, session.profile_name)
         )
+
+    def menu_interaction(
+        self, message: IncomingMessage, session: ConversationSession
+    ) -> None:
+        if message.selection_id == "home_search":
+            updated = self._transitions.start_search(message.sender)
+            self._send_prompt(message.sender, build_fuel_prompt(updated.language))
+            return
+        self._send_expected_prompt(message.sender, session)
 
     def fuel_selection(self, sender: str, fuel_type: str) -> None:
         session = self._transitions.select_fuel(sender, fuel_type)
