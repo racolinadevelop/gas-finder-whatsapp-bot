@@ -142,6 +142,9 @@ TRANSLATIONS = {
         "top_result_best": "⭐ Best overall option",
 
         "station_price": "⛽ {fuel}: {price}",
+        "price_last_reported": "🕒 Provider price update: {timestamp}",
+        "price_update_unknown": "⚪ Price update time unavailable — verify at the pump",
+        "price_may_be_stale": "⚠️ Price update is 48+ hours old; the pump price may differ",
         "station_distance": "📍 Distance (straight line): {distance:.2f} mi",
         "station_road_distance": "🚗 Driving distance: {distance:.2f} mi · approx. {minutes} min",
         "station_directions": "🗺️ Driving directions: {url}",
@@ -339,6 +342,9 @@ TRANSLATIONS = {
         "top_result_best": "⭐ Mejor opción general",
 
         "station_price": "⛽ {fuel}: {price}",
+        "price_last_reported": "🕒 Actualización del precio según proveedor: {timestamp}",
+        "price_update_unknown": "⚪ Fecha del precio no disponible — comprueba en el surtidor",
+        "price_may_be_stale": "⚠️ El precio lleva 48+ horas sin actualizarse; puede variar en el surtidor",
         "station_distance": "📍 Distancia: {distance:.2f} mi (en línea recta)",
         "station_road_distance": "🚗 Por carretera: {distance:.2f} mi · aprox. {minutes} min",
         "station_directions": "🗺️ Cómo llegar: {url}",

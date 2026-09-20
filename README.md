@@ -48,6 +48,9 @@ boundaries, preserved behaviors, automated tests and the live smoke-test checkli
 - Receive user location directly from WhatsApp
 - Retrieve real gas station information from the configured provider
 - Retrieve available fuel prices
+- Show the selected fuel's provider-reported update time in UTC when available;
+  flag updates 48+ hours old and explain when the update time is missing,
+  without extra Google requests or implying the pump price is verified
 - Support:
   - Regular
   - Premium
@@ -562,7 +565,8 @@ Next product stages, in planned order:
 2. Optionally activate and verify capped road-distance and ETA enrichment
    after enabling Google Routes API; navigation links already work without it.
    Later, update ranking and estimated cost to use driving distances safely.
-3. Clarify fuel-price update timestamps and stale-price warnings.
+3. Price-update timestamps and 48-hour age warnings are now shown in
+   WhatsApp; continue monitoring provider coverage and compare real pump prices.
 4. Save user-level fuel/radius preferences separately from active conversations.
 5. Connect Stripe subscriptions in test mode: individual checkout links,
    verified payment webhooks, a subscription-management portal and explicit
