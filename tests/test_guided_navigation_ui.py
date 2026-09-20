@@ -161,7 +161,7 @@ def test_back_button_from_second_screen_returns_to_language_without_greeting(
     assert "Ramon" not in sent[0][1]["body_text"]
 
 
-def test_location_step_sends_only_native_location_request(monkeypatch):
+def test_location_step_sends_navigation_before_native_location_request(monkeypatch):
     whatsapp_handler.conversation_store.clear()
     session = whatsapp_handler.conversation_store.update(
         SENDER,
@@ -175,6 +175,77 @@ def test_location_step_sends_only_native_location_request(monkeypatch):
 
     whatsapp_handler.send_state_prompt(SENDER, session)
 
-    assert len(sent) == 1
-    assert sent[0][0] == "text"
-    assert "esperando tu ubicación" in sent[0][1]["message"].lower()
+    assert [kind for kind, _ in sent] == ["buttons", "text"]
+    assert [button["id"] for button in sent[0][1]["buttons"]] == [
+        "nav_back", "nav_menu",
+    ]
+    assert [button["title"] for button in sent[0][1]["buttons"]] == [
+        "⬅️ Atrás", "🏠 Menú",
+    ]
+    assert "esperando tu ubicación" in sent[1][1]["message"].lower()
+
+
+def test_back_from_location_returns_to_distance_with_saved_preferences(monkeypatch):
+    whatsapp_handler.conversation_store.clear()
+    whatsapp_handler.conversation_store.update(
+        SENDER,
+        state=ConversationState.WAITING_LOCATION,
+        language="es",
+        fuel_type="premium",
+        sort="price",
+        max_distance_miles=3,
+    )
+    sent = capture_sent_prompts(monkeypatch)
+
+    whatsapp_handler.handle_interactive_message(
+        IncomingMessage(
+            sender=SENDER,
+            message_type="interactive",
+            interactive_type="button_reply",
+            selection_id="nav_back",
+        )
+    )
+
+    session = whatsapp_handler.conversation_store.get(SENDER)
+    assert session.state == ConversationState.WAITING_DISTANCE
+    assert session.language == "es"
+    assert session.fuel_type == "premium"
+    assert session.sort == "price"
+    assert session.max_distance_miles == 3
+    assert [kind for kind, _ in sent] == ["list", "buttons"]
+    assert [row["id"] for row in sent[0][1]["rows"]] == [
+        "distance_1", "distance_3", "distance_5", "distance_10",
+        "distance_custom",
+    ]
+
+
+def test_menu_from_location_restarts_without_repeating_greeting(monkeypatch):
+    whatsapp_handler.conversation_store.clear()
+    whatsapp_handler.conversation_store.update(
+        SENDER,
+        state=ConversationState.WAITING_LOCATION,
+        profile_name="Ramon",
+        language="es",
+        fuel_type="premium",
+        sort="price",
+        max_distance_miles=3,
+    )
+    sent = capture_sent_prompts(monkeypatch)
+
+    whatsapp_handler.handle_interactive_message(
+        IncomingMessage(
+            sender=SENDER,
+            message_type="interactive",
+            interactive_type="button_reply",
+            selection_id="nav_menu",
+        )
+    )
+
+    session = whatsapp_handler.conversation_store.get(SENDER)
+    assert session.state == ConversationState.WAITING_LANGUAGE
+    assert session.profile_name == "Ramon"
+    assert [kind for kind, _ in sent] == ["buttons"]
+    assert [button["id"] for button in sent[0][1]["buttons"]] == [
+        "lang_en", "lang_es",
+    ]
+    assert "Welcome" not in sent[0][1]["body_text"]
