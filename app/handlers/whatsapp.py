@@ -17,6 +17,7 @@ from app.handlers.webhook_dispatch import process_webhook
 from app.intelligence import build_intent_interpreter
 from app.models import IncomingMessage
 from app.parsers import parse_incoming_message
+from app.preferences import SearchPreferences
 from app.presentation import (
     Prompt,
     build_distance_prompt,
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 runtime_state = build_runtime_state()
 conversation_store = runtime_state.conversation_store
+search_preferences_store = runtime_state.search_preferences_store
 intent_interpreter = build_intent_interpreter()
 subscription_service = SubscriptionService(runtime_state.subscription_store)
 location_search_service = LocationSearchService()
@@ -196,6 +198,23 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
     )
 
 
+def load_search_preferences(sender: str) -> SearchPreferences | None:
+    try:
+        return search_preferences_store.get(sender)
+    except Exception:
+        # Profile persistence is optional enrichment, not a reason to stop gas searches.
+        logger.warning("Could not load search preferences")
+        return None
+
+
+def save_search_preferences(sender: str, preferences: SearchPreferences) -> None:
+    try:
+        search_preferences_store.save(sender, preferences)
+    except Exception:
+        # Delivery succeeded already; do not let a profile write break navigation.
+        logger.warning("Could not save search preferences")
+
+
 def search_from_location(
     incoming_message: IncomingMessage,
     session: ConversationSession,
@@ -208,6 +227,7 @@ def search_from_location(
         send_text=send_text_message,
         update_session=conversation_transitions.apply,
         send_prompt=send_prompt,
+        save_preferences=save_search_preferences,
     )
 
 
@@ -218,6 +238,7 @@ def handle_location_message(incoming_message: IncomingMessage) -> None:
         search_from_location=search_from_location,
         dispatch_state_location=location_state_router.dispatch,
         send_expected=send_expected_prompt,
+        load_preferences=load_search_preferences,
     )
 
 
