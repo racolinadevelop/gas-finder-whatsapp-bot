@@ -551,3 +551,93 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_SORT
     )
+
+
+def test_language_choice_is_remembered_and_change_language_is_explicit(bot):
+    bot.text("hola")
+    bot.assert_sent("buttons")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_LANGUAGE
+    )
+
+    bot.sent.clear()
+    bot.button("lang_es")
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+    assert handler.user_language_store.get(SENDER) == "es"
+    bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
+    assert bot.sent[-1][1]["button_text"] == "Abrir menú"
+
+    # Favorites is now available as a visible action before a gas search;
+    # free users receive the Premium gate rather than an invalid-step prompt.
+    bot.sent.clear()
+    bot.button("fav_list", kind="list_reply")
+    bot.assert_sent("text")
+    assert "requiere Premium" in bot.sent[-1][1]["message"]
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+    assert bot.searches == []
+
+    # Simulate a fresh worker or an expired Redis session. No second language
+    # prompt is allowed: the durable selection opens the Spanish home menu.
+    handler.conversation_store.clear()
+    bot.sent.clear()
+    bot.text("hola")
+    bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
+    assert bot.sent[-1][1]["button_text"] == "Abrir menú"
+    assert handler.conversation_store.get(SENDER).language == "es"
+
+    bot.sent.clear()
+    bot.button("nav_language", kind="list_reply")
+    bot.assert_sent("buttons")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_LANGUAGE
+    )
+    # The old preference must not be erased until the replacement is selected.
+    assert handler.user_language_store.get(SENDER) == "es"
+    bot.sent.clear()
+    bot.button("lang_en")
+    bot.assert_sent("list")
+    assert bot.sent[-1][1]["button_text"] == "Open menu"
+    assert handler.user_language_store.get(SENDER) == "en"
+
+    bot.sent.clear()
+    bot.text("menu")
+    bot.assert_sent("list")
+    assert bot.sent[-1][1]["button_text"] == "Open menu"
+    handler.conversation_store.clear()
+    bot.sent.clear()
+    bot.text("hello")
+    bot.assert_sent("list")
+    assert bot.sent[-1][1]["button_text"] == "Open menu"
+    assert handler.conversation_store.get(SENDER).language == "en"
+
+    bot.sent.clear()
+    bot.button("home_search", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list([
+        "fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu",
+    ])
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_FUEL
+    )
+
+    bot.sent.clear()
+    bot.button("nav_back", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
+    assert handler.conversation_store.get(SENDER).language == "en"
+
+
+def test_existing_saved_search_language_is_migrated_on_next_greeting(bot):
+    from app.preferences import SearchPreferences
+
+    handler.search_preferences_store.save(SENDER, SearchPreferences(
+        language="es", fuel_type="diesel", sort="price", max_distance_miles=3,
+    ))
+    assert handler.user_language_store.get(SENDER) is None
+    bot.text("hola")
+    bot.assert_sent("list")
+    assert bot.sent[-1][1]["button_text"] == "Abrir menú"
+    assert handler.user_language_store.get(SENDER) == "es"
+    assert bot.searches == []
