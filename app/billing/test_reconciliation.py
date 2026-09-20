@@ -65,7 +65,9 @@ def _current_status(
         for row in entries if isinstance(row, dict)
     ] if isinstance(entries, list) else []
     if price_id not in prices:
-        raise StripeTestError("Stripe subscription uses the wrong test Price")
+        # A user can change their subscription items in a test portal. Revoke
+        # access rather than leaving previously paid Premium active indefinitely.
+        return "inactive"
 
     status = subscription.get("status")
     if status in {"canceled", "incomplete_expired"}:
