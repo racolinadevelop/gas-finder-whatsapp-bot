@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 from app.config import ROUTES_API_ENABLED
+from app.favorites.models import SearchReply, shown_stations
 from app.conversation.models import ConversationSession
 from app.services.road_routes import add_road_routes, rank_displayed_stations_by_road
 from app.services.stations import search_nearby_gas_stations
@@ -38,7 +39,8 @@ class LocationSearchService:
         session: ConversationSession,
         latitude: float,
         longitude: float,
-    ) -> str:
+        capture_results: bool = False,
+    ) -> str | SearchReply:
         radius = (
             session.max_distance_miles * 1609.344
             if session.max_distance_miles is not None
@@ -73,10 +75,15 @@ class LocationSearchService:
             # estimate; never silently label the latter a driving distance.
             result = {**result, "routes_requested": True}
 
-        return self._reply_builder(
+        reply = self._reply_builder(
             result,
             language=session.language,
             fuel_type=session.fuel_type,
             sort=session.sort,
             max_distance_miles=session.max_distance_miles,
         )
+        if capture_results:
+            # Reuse the displayed stations; no extra Places/Routes calls.
+            # Do not store the user's location, prices or travel history.
+            return SearchReply(reply, shown_stations(result.get("stations", [])))
+        return reply
