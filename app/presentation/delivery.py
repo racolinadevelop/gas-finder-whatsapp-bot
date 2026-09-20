@@ -83,7 +83,8 @@ def deliver_prompt(
     if isinstance(prompt, ListPrompt):
         rows = prompt.rows
         if state not in {
-            None, ConversationState.NEW, ConversationState.WAITING_LANGUAGE
+            None, ConversationState.NEW, ConversationState.WAITING_LANGUAGE,
+            ConversationState.MAIN_MENU
         }:
             rows = [*rows, *_navigation_rows(language)]
         send_list(
