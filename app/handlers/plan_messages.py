@@ -1,19 +1,12 @@
-"""Read-only, bilingual plan summary for a WhatsApp user's own account.
+"""Read-only, concise bilingual plan summary for a WhatsApp user's own account.
 
-No Checkout or billing URLs are sent from this flow. The global command must
-not change the current gas-station search session.
+Never send Checkout links; never change the active gas search session.
 """
 
 PLAN_SELECTION_ID = "account_plan"
 PLAN_TEXT_COMMANDS = frozenset(
-    {
-        "mi plan",
-        "mi suscripción",
-        "mi suscripcion",
-        "my plan",
-        "my subscription",
-        "/plan",
-    }
+    {"mi plan", "mi suscripción", "mi suscripcion",
+     "my plan", "my subscription", "/plan"}
 )
 
 
@@ -27,52 +20,62 @@ def build_plan_message(
     regular_premium: bool,
     test_status: str | None,
 ) -> str:
-    """Report verified stored access, not aspirational Premium features."""
-    if language not in {"es", "en"}:
-        return (
-            build_plan_message(
-                "en", regular_premium=regular_premium, test_status=test_status
-            )
-            + "\n\n"
-            + build_plan_message(
-                "es", regular_premium=regular_premium, test_status=test_status
-            )
-        )
-
+    """Describe verified local access, including an isolated Stripe sandbox."""
     sandbox_premium = test_status == "active" and not regular_premium
-    if language == "es":
-        if regular_premium:
-            headline = "⭐ Tu plan actual: Premium."
-        elif sandbox_premium:
-            headline = "⭐ Tu plan actual: Premium (prueba de Stripe)."
-        else:
-            headline = "⛽ Tu plan actual: Gratis."
-        note = ""
-        if not regular_premium and test_status == "canceled":
-            note = "\nTu suscripción de prueba está cancelada."
-        elif not regular_premium and test_status == "past_due":
-            note = "\nTu suscripción de prueba no tiene acceso Premium activo."
+    if language not in {"es", "en"}:
+        # Before language selection, keep both languages genuinely brief.
+        es = ("⭐ Premium" if regular_premium else
+              "⭐ Premium (prueba)" if sandbox_premium else "⛽ Gratis")
+        en = ("⭐ Premium" if regular_premium else
+              "⭐ Premium (test)" if sandbox_premium else "⛽ Free")
+        cancelled = (
+            "\nPrueba cancelada. / Test subscription canceled."
+            if test_status == "canceled" and not regular_premium else ""
+        )
         return (
-            f"{headline}{note}\n\n"
-            "La búsqueda básica de gasolineras sigue disponible. "
-            "Las funciones exclusivas de Premium todavía están en desarrollo.\n\n"
-            "Puedes continuar donde estabas o escribir «menú» para empezar de nuevo."
+            f"Tu plan / Your plan: {es} · {en}.{cancelled}\n"
+            "Búsqueda básica gratis / Basic search is free.\n"
+            "Favoritas: solo Premium / Favorites: Premium only.\n"
+            "Elige idioma para continuar / Choose a language to continue."
         )
 
-    if regular_premium:
-        headline = "⭐ Your current plan: Premium."
-    elif sandbox_premium:
-        headline = "⭐ Your current plan: Premium (Stripe test)."
-    else:
-        headline = "⛽ Your current plan: Free."
-    note = ""
-    if not regular_premium and test_status == "canceled":
-        note = "\nYour test subscription has been canceled."
-    elif not regular_premium and test_status == "past_due":
-        note = "\nYour test subscription has no active Premium access."
+    if language == "es":
+        headline = (
+            "⭐ Tu plan actual: Premium."
+            if regular_premium else
+            "⭐ Tu plan actual: Premium (prueba de Stripe)."
+            if sandbox_premium else
+            "⛽ Tu plan actual: Gratis."
+        )
+        note = (
+            "\nTu suscripción de prueba está cancelada."
+            if test_status == "canceled" and not regular_premium else
+            "\nTu suscripción de prueba no tiene acceso Premium activo."
+            if test_status == "past_due" and not regular_premium else ""
+        )
+        return (
+            f"{headline}{note}\n"
+            "La búsqueda básica de gasolineras es gratis. "
+            "Guardar y consultar favoritas requiere Premium.\n"
+            "Escribe «mis favoritas» o «menú» para continuar."
+        )
+
+    headline = (
+        "⭐ Your current plan: Premium."
+        if regular_premium else
+        "⭐ Your current plan: Premium (Stripe test)."
+        if sandbox_premium else
+        "⛽ Your current plan: Free."
+    )
+    note = (
+        "\nYour test subscription has been canceled."
+        if test_status == "canceled" and not regular_premium else
+        "\nYour test subscription has no active Premium access."
+        if test_status == "past_due" and not regular_premium else ""
+    )
     return (
-        f"{headline}{note}\n\n"
-        "Basic gas-station search is still available. "
-        "Premium-only features are still under development.\n\n"
-        "Continue where you left off, or type “menu” to start over."
+        f"{headline}{note}\n"
+        "Basic gas-station search is free. "
+        "Saving and viewing favorites requires Premium.\n"
+        "Type “my favorites” or “menu” to continue."
     )
