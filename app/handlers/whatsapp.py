@@ -70,7 +70,7 @@ try:
     )
 except Exception:
     # Optional Premium storage must not prevent free gas searches from starting.
-    logger.exception("Could not initialize favorite station storage")
+    logger.warning("Could not initialize optional favorite station storage")
     favorites_store = None
 conversation_transitions = ConversationTransitions(conversation_store)
 message_deduplicator = runtime_state.message_deduplicator
@@ -318,13 +318,18 @@ def handle_favorite_action(
                 "I couldn't find that favorite. Type “my favorites” for the numbers."
             )
     except Exception:
-        logger.exception("Could not process favorite action")
+        logger.warning("Could not process favorite action")
         message = (
             "⚠️ No pude actualizar tus favoritas ahora. Inténtalo de nuevo."
             if spanish else
             "⚠️ Couldn't update favorites right now. Please try again."
         )
-    send_text_message(to=sender, message=message)
+    try:
+        send_text_message(to=sender, message=message)
+    except WhatsAppServiceError:
+        # A remove already committed to the store. Retrying the same message
+        # could remove the NEXT numbered favorite. Never replay that mutation.
+        logger.warning("Could not deliver favorite action acknowledgement")
 
 
 def save_recent_if_premium(
