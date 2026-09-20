@@ -41,6 +41,7 @@ LANGUAGE_COMMANDS = {"cambiar idioma", "change language", "/language", "idioma"}
 
 PREVIOUS_STATES = {
     ConversationState.MAIN_MENU: ConversationState.MAIN_MENU,
+    ConversationState.WAITING_LANGUAGE: ConversationState.WAITING_LANGUAGE,
     ConversationState.WAITING_FUEL: ConversationState.MAIN_MENU,
     ConversationState.WAITING_SORT: ConversationState.WAITING_FUEL,
     ConversationState.WAITING_DISTANCE: ConversationState.WAITING_SORT,
@@ -77,4 +78,4 @@ def parse_navigation_action(value: str | None) -> NavigationAction | None:
 
 
 def get_previous_state(state: ConversationState) -> ConversationState:
-    return PREVIOUS_STATES.get(state, ConversationState.MAIN_MENU)
+    return PREVIOUS_STATES.get(state, ConversationState.WAITING_LANGUAGE)
