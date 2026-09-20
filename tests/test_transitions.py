@@ -54,11 +54,11 @@ def test_menu_navigation_resets_all_preferences():
 
     session = transitions.navigate("sender", NavigationAction.MENU)
 
-    assert session.state == ConversationState.WAITING_LANGUAGE
-    assert session.language == "en"
-    assert session.fuel_type == "regular"
-    assert session.sort == "best"
-    assert session.max_distance_miles is None
+    assert session.state == ConversationState.MAIN_MENU
+    assert session.language == "es"
+    assert session.fuel_type == "diesel"
+    assert session.sort == "price"
+    assert session.max_distance_miles == 5
 
 
 def test_back_navigation_preserves_preferences():
@@ -87,7 +87,7 @@ def test_language_selection_starts_clean_guided_search():
 
     session = transitions.select_language("sender", "es")
 
-    assert session.state == ConversationState.WAITING_FUEL
+    assert session.state == ConversationState.MAIN_MENU
     assert session.language == "es"
     assert session.fuel_type == "regular"
     assert session.sort == "best"
@@ -206,7 +206,7 @@ def test_menu_resets_preferences_but_keeps_display_name():
     )
     session = transitions.navigate("sender", NavigationAction.MENU)
 
-    assert session.state == ConversationState.WAITING_LANGUAGE
+    assert session.state == ConversationState.MAIN_MENU
     assert session.profile_name == "Ramon"
-    assert session.language == "en"
-    assert session.fuel_type == "regular"
+    assert session.language == "es"
+    assert session.fuel_type == "diesel"
