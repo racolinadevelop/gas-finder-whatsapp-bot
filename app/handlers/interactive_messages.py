@@ -9,6 +9,7 @@ from app.conversation import (
     parse_navigation_action,
 )
 from app.models import IncomingMessage
+from app.handlers.plan_messages import PLAN_SELECTION_ID
 
 
 def process_interactive_message(
@@ -20,6 +21,7 @@ def process_interactive_message(
     select_language: Callable[..., None],
     dispatch_state_interactive: Callable[[IncomingMessage, ConversationSession], bool],
     send_expected: Callable[[str, ConversationSession], None],
+    show_plan: Callable[[str], None] | None = None,
 ) -> None:
     """Prioritize global navigation and reject stale language buttons."""
     sender = incoming_message.sender
@@ -28,6 +30,10 @@ def process_interactive_message(
 
     if navigation_action is not None:
         navigate(sender, navigation_action)
+        return
+
+    if button_id == PLAN_SELECTION_ID and show_plan is not None:
+        show_plan(sender)
         return
 
     session = ensure_started(sender)
