@@ -174,6 +174,7 @@ def test_spanish_flow_from_real_webhook_through_results_and_menu(bot):
     assert len(bot.searches) == 1
     assert bot.searches[0] == {
         "session": session, "latitude": 38.25, "longitude": -85.75,
+        "capture_results": True,
     }
     bot.assert_sent("text", "list")
     assert bot.sent[0][1]["message"] == "STATION_RESULTS"
