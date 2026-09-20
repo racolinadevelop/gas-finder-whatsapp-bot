@@ -308,6 +308,29 @@ def build_favorites_result_navigation_prompt(language: str, count: int) -> ListP
     )
 
 
+def build_main_menu_prompt(language: str, display_name: str | None = None) -> ListPrompt:
+    """Four clear choices after language selection, in one WhatsApp list."""
+    language = language if language in {"es", "en"} else "en"
+    title = (
+        f"👋 ¡Hola, {display_name}! ¿Qué deseas hacer?"
+        if language == "es" and display_name else
+        "👋 ¿Qué deseas hacer?" if language == "es" else
+        f"👋 Hi, {display_name}! What would you like to do?"
+        if display_name else "👋 What would you like to do?"
+    )
+    return ListPrompt(
+        body_text=title,
+        button_text="Abrir menú" if language == "es" else "Open menu",
+        section_title="Menú principal" if language == "es" else "Main menu",
+        rows=[
+            {"id": "home_search", "title": "⛽ Buscar gasolineras" if language == "es" else "⛽ Find gas stations"},
+            {"id": "fav_list", "title": "⭐ Mis favoritas" if language == "es" else "⭐ My favorites"},
+            {"id": "account_plan", "title": "👤 Mi plan" if language == "es" else "👤 My plan"},
+            {"id": "nav_language", "title": "🌐 Cambiar idioma" if language == "es" else "🌐 Change language"},
+        ],
+    )
+
+
 def build_state_prompt(
     session: ConversationSession,
     error: bool = False,
@@ -321,6 +344,8 @@ def build_state_prompt(
             display_name=session.profile_name,
             greeting=False,
         )
+    if session.state == ConversationState.MAIN_MENU:
+        return build_main_menu_prompt(session.language, session.profile_name)
     if session.state == ConversationState.WAITING_FUEL:
         return build_fuel_prompt(session.language, error=error)
     if session.state == ConversationState.WAITING_SORT:
