@@ -48,9 +48,8 @@ boundaries, preserved behaviors, automated tests and the live smoke-test checkli
 - Receive user location directly from WhatsApp
 - Retrieve real gas station information from the configured provider
 - Retrieve available fuel prices
-- Show the selected fuel's provider-reported update time in UTC when available;
-  flag updates 48+ hours old and explain when the update time is missing,
-  without extra Google requests or implying the pump price is verified
+- Keep provider price-update timestamps for internal price metadata, but show
+  concise WhatsApp result cards without timestamp or opening-hour labels
 - Support:
   - Regular
   - Premium
@@ -82,8 +81,11 @@ boundaries, preserved behaviors, automated tests and the live smoke-test checkli
 - Understand a requested maximum distance in miles or kilometers
 - Offer a guided WhatsApp distance list with 1, 3, 5, 10 miles or a custom value
 - Explain why the top "Best option" balances price and travel distance
-- Exclude Google stations explicitly marked closed or non-operational and label unknown hours
+- Exclude Google stations explicitly marked closed or non-operational; retain
+  unknown-hour stations without claiming they are open
 - Keep guided-search preferences when navigating Back or retrying after a provider failure
+- Remember completed search settings separately from conversation state, and
+  restore them when a returning user sends a location after session expiry
 - Ignore repeated WhatsApp message IDs and rate-limit station searches per user
 - Maintain a centralized Free/Premium subscription and feature-access foundation (billing not yet connected)
 - Keep language interpretation separate from deterministic station lookup
@@ -546,9 +548,12 @@ PostgreSQL-ready persistent subscription state ✅
 - Three Places pages improve coverage but do not guarantee that a particular
   station is returned. Set `GOOGLE_TEXT_MAX_PAGES=1` or `=2` for fewer API
   requests at the cost of potentially missing stations and cheaper prices.
-- A user can select search preferences in the active guided flow, but the bot
-  does not yet persist preferred fuel or radius as a separate user profile.
-  A user sharing location without an existing session uses default values.
+- Completed guided searches store preferred language, fuel, sorting, and radius
+  in a separate user profile (PostgreSQL in production). After the temporary
+  conversation expires, sending a new location reuses that profile. A first-time
+  user without saved preferences still uses defaults. Menu starts a fresh guided
+  search and does not silently preload previous choices; a new completed guided
+  search replaces the saved profile.
 - Station prices and opening hours depend on provider coverage and freshness.
   Unknown hours are not proof that a station is open. HERE does not verify
   real-time open status.
@@ -570,9 +575,10 @@ Next product stages, in planned order:
    real driving distance/ETA and driving-based ranking among the five displayed
    candidates. Verify real WhatsApp results and API-element costs before
    increasing traffic or widening the candidate pool.
-3. Price-update timestamps and 48-hour age warnings are now shown in
-   WhatsApp; continue monitoring provider coverage and compare real pump prices.
-4. Save user-level fuel/radius preferences separately from active conversations.
+3. Keep price timestamps as internal provider metadata; the simplified WhatsApp
+   display intentionally hides update-time and opening-hour labels.
+4. User-level language, fuel, sorting and radius preferences now persist
+   separately from the active conversation (implemented).
 5. Connect Stripe subscriptions in test mode: individual checkout links,
    verified payment webhooks, a subscription-management portal and explicit
    Free/Premium feature gates; do not enable live billing until paid features
