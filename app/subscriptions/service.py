@@ -1,3 +1,10 @@
+from typing import Protocol
+
+
+class TestEntitlementStore(Protocol):
+    def has_premium_access(self, whatsapp_id: str) -> bool: ...
+
+
 from app.subscriptions.models import (
     Feature,
     SubscriptionPlan,
@@ -27,8 +34,11 @@ class SubscriptionService:
     def __init__(
         self,
         store: SubscriptionStore | None = None,
+        test_entitlements: TestEntitlementStore | None = None,
     ) -> None:
         self.store = store or InMemorySubscriptionStore()
+        # Test entitlements only exist when Stripe test mode is explicitly enabled.
+        self.test_entitlements = test_entitlements
 
     def ensure_user(self, whatsapp_id: str) -> UserSubscription:
         return self.store.get_or_create(whatsapp_id)
@@ -49,7 +59,13 @@ class SubscriptionService:
         subscription = self.ensure_user(whatsapp_id)
         allowed_features = (
             PREMIUM_FEATURES
-            if subscription.has_premium_access
+            if (
+                subscription.has_premium_access
+                or (
+                    self.test_entitlements is not None
+                    and self.test_entitlements.has_premium_access(whatsapp_id)
+                )
+            )
             else FREE_FEATURES
         )
         return requested_feature in allowed_features
