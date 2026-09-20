@@ -113,3 +113,59 @@ def test_search_captures_same_five_stations_with_single_provider_call():
     assert reply.text == normal
     assert [s.name for s in reply.stations] == ["Station 1", "Station 2"]
     assert len(calls) == 1
+
+
+def test_recent_choices_are_not_saved_when_whatsapp_result_delivery_fails():
+    from app.conversation import ConversationState
+    from app.handlers.location_results import run_location_search
+    from app.models import IncomingMessage
+    from app.services.whatsapp import WhatsAppServiceError
+
+    station = FavoriteStation(key="place:example", name="Example", address="1 Main")
+    saved = []
+    original = ConversationSession(
+        sender=SENDER, state=ConversationState.WAITING_LOCATION, language="es",
+    )
+    run_location_search(
+        IncomingMessage(
+            sender=SENDER, message_type="location",
+            latitude=38.25, longitude=-85.75,
+        ),
+        original,
+        allow_search=lambda _: True,
+        search=lambda **kwargs: SearchReply("Result", (station,)),
+        send_text=lambda **kwargs: (_ for _ in ()).throw(
+            WhatsAppServiceError("send failed")
+        ),
+        update_session=lambda *_: pytest.fail("must not advance"),
+        send_prompt=lambda *_: pytest.fail("must not send actions"),
+        save_recent=lambda who, stations: saved.append((who, stations)) or True,
+    )
+    assert saved == []
+    assert original.state == ConversationState.WAITING_LOCATION
+
+
+def test_premium_result_actions_are_in_one_bounded_whatsapp_list():
+    from app.conversation import ConversationState
+    from app.presentation.prompts import build_favorites_result_navigation_prompt
+    from app.presentation.delivery import deliver_prompt
+
+    prompt = build_favorites_result_navigation_prompt("es", 5)
+    calls = []
+    deliver_prompt(
+        SENDER, prompt,
+        ConversationSession(
+            sender=SENDER, state=ConversationState.WAITING_RESULTS,
+            language="es",
+        ),
+        send_buttons=lambda **kwargs: pytest.fail("should use a list"),
+        send_list=lambda **kwargs: calls.append(kwargs),
+        send_text=lambda **kwargs: pytest.fail("should use a list"),
+    )
+    assert len(calls) == 1
+    assert [r["id"] for r in calls[0]["rows"]] == [
+        "fav_save_1", "fav_save_2", "fav_save_3", "fav_save_4",
+        "fav_save_5", "fav_list", "nav_back", "nav_menu",
+    ]
+    assert len(calls[0]["section_title"]) <= 24
+    assert len(calls[0]["button_text"]) <= 20
