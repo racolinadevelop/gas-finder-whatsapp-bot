@@ -492,3 +492,42 @@ def test_favorite_remove_is_not_replayed_if_whatsapp_acknowledgement_fails(
     # Meta retry of the same message must never delete a second item.
     bot.post(message, message_id="wamid.favorite-remove-once")
     assert [item.name for item in store.list_favorites(SENDER)] == ["Station B"]
+
+
+def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, monkeypatch):
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    # The sender has no active Premium entitlement. Both requests must go
+    # directly to the feature gate rather than the current conversation state.
+    monkeypatch.setattr(
+        handler, "subscription_service",
+        SubscriptionService(InMemorySubscriptionStore()),
+    )
+    bot.text("hola")
+    bot.sent.clear()
+
+    bot.text("Mi favorita")
+    bot.assert_sent("text")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_LANGUAGE
+    )
+
+    bot.sent.clear()
+    bot.button("lang_es")
+    bot.sent.clear()
+    original = handler.conversation_store.get(SENDER)
+    assert original.state == ConversationState.WAITING_FUEL
+
+    bot.text("Mi favorita")
+    bot.assert_sent("text")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert "Esa opción no corresponde" not in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER) == original
+    assert bot.searches == []
+
+    bot.sent.clear()
+    bot.button("fuel_regular", kind="list_reply")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_SORT
+    )
