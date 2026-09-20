@@ -28,7 +28,18 @@ candidates, including some Sam's Club results. It then:
 6. Returns up to the requested display limit.
 
 Price data and operating-hours responses come from the provider, can be missing
-or stale, and are not independently verified by this application. This policy
+or stale, and are not independently verified by this application.
+
+For the selected fuel, the WhatsApp response uses the price-update timestamp
+**already present in the provider's search response** (`updateTime` from Google
+or `modified` from HERE, when available). It shows an unambiguous UTC date and
+time. An update at least **48 hours old** is flagged because the actual pump
+price may have changed; an absent, malformed, timezone-less or implausibly
+future timestamp is labeled *update time unavailable* instead of claiming a
+fresh price. The age threshold is a display warning, not a claim that a
+recently reported price is accurate. These labels do not change search
+ranking, filter out stations or trigger any additional Google/HERE calls.
+Ask users to confirm prices at the station. This policy
 also applies to Sam's Club and other brands; there is no brand-specific filter.
 
 ## HERE test configuration

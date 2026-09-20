@@ -5,6 +5,7 @@ import httpx
 from app.intelligence import RuleBasedIntentInterpreter
 from app.i18n import t
 from app.models import IncomingMessage
+from app.presentation.price_freshness import price_update_lines
 
 from app.config import (
     WHATSAPP_ACCESS_TOKEN,
@@ -391,21 +392,14 @@ def build_gas_stations_reply(
             # Explicitly closed Google stations are filtered before this step.
             station_lines.append(t(language, "station_hours_unknown"))
 
-        station_lines.extend(
-            [
-                t(
-                    language,
-                    "station_price",
-                    fuel=fuel_name,
-                    price=price_text,
-                ),
-                t(
-                    language,
-                    "station_distance",
-                    distance=distance,
-                ),
-            ]
+        station_lines.append(
+            t(language, "station_price", fuel=fuel_name, price=price_text)
         )
+        if price is not None:
+            station_lines.extend(
+                price_update_lines(selected_fuel.get("updated_at"), language=language)
+            )
+        station_lines.append(t(language, "station_distance", distance=distance))
 
         road_miles = station.get("road_distance_miles")
         road_minutes = station.get("road_eta_minutes")
