@@ -433,6 +433,7 @@ def test_wrong_button_while_waiting_for_language_repeats_language_prompt(
     assert [button["id"] for button in sent_messages[0]["buttons"]] == [
         "lang_en",
         "lang_es",
+    "account_plan",
     ]
     assert whatsapp_handler.conversation_store.get(sender).state == (
         ConversationState.WAITING_LANGUAGE
@@ -550,6 +551,7 @@ def test_menu_command_resets_session(monkeypatch):
     assert [button["id"] for button in sent_messages[0]["buttons"]] == [
         "lang_en",
         "lang_es",
+    "account_plan",
     ]
 
     whatsapp_handler.conversation_store.clear()
