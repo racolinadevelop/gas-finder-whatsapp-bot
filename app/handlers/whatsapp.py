@@ -14,6 +14,7 @@ from app.conversation import (
 from app.conversation.options import LANGUAGE_BUTTONS
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.location_results import run_location_search
+from app.handlers.webhook_dispatch import process_webhook
 from app.i18n import t
 from app.intelligence import IntentType, build_intent_interpreter
 from app.models import IncomingMessage
@@ -154,30 +155,14 @@ def handle_navigation(sender: str, action: NavigationAction) -> None:
 
 
 def handle_whatsapp_webhook(payload: dict) -> dict:
-    incoming_message = parse_incoming_message(payload)
-
-    if not incoming_message:
-        logger.info("WhatsApp webhook event without a user message")
-        return {"status": "ok"}
-
-    if not message_deduplicator.claim(incoming_message.message_id):
-        logger.info("Ignoring duplicate WhatsApp message")
-        return {"status": "ok"}
-
-    logger.info(
-        "Incoming WhatsApp message type=%s",
-        incoming_message.message_type,
+    return process_webhook(
+        payload,
+        parse_message=parse_incoming_message,
+        claim_message=message_deduplicator.claim,
+        release_message=message_deduplicator.release,
+        ensure_user=subscription_service.ensure_user,
+        dispatch_message=message_router.dispatch,
     )
-
-    try:
-        subscription_service.ensure_user(incoming_message.sender)
-        message_router.dispatch(incoming_message)
-    except Exception:
-        message_deduplicator.release(incoming_message.message_id)
-        raise
-
-    return {"status": "ok"}
-
 
 def apply_search_flow_decision(
     sender: str,
