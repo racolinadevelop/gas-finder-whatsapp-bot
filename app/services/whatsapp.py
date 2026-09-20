@@ -402,7 +402,12 @@ def build_gas_stations_reply(
                 t(
                     language,
                     "station_distance",
-                    distance=distan        road_miles = station.get("road_distance_miles")
+                    distance=distance,
+                ),
+            ]
+        )
+
+        road_miles = station.get("road_distance_miles")
         road_minutes = station.get("road_eta_minutes")
         if road_miles is not None and road_minutes is not None:
             station_lines.append(
@@ -444,8 +449,6 @@ def build_gas_stations_reply(
                 }
             )
             station_lines.append(t(language, "station_directions", url=url))
-
-        lines.append("\n".join(station_lines))
 
         lines.append("\n".join(station_lines))
 
