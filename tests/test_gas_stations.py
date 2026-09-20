@@ -1645,5 +1645,5 @@ def test_build_gas_stations_reply_spanish():
     assert "$4.100/gal" in reply
     assert "Opción más barata" in reply
     assert "Regular: $4.100/gal" in reply
-    assert "Distancia: 0.56 mi" in reply
+    assert "Distancia aproximada: 0.56 mi" in reply
     assert "200 Market St, Louisville, KY" in reply

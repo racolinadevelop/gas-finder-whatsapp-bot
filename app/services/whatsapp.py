@@ -376,11 +376,17 @@ def build_gas_stations_reply(
         ]
 
         if index == 1:
-            station_lines.append(t(language, f"top_result_{sort}"))
-            if sort == "best":
-                station_lines.append(
-                    build_best_recommendation_explanation(stations, language)
-                )
+            route_ready = (
+                not result.get("routes_requested")
+                or sort == "price"
+                or station.get("road_distance_miles") is not None
+            )
+            if route_ready:
+                station_lines.append(t(language, f"top_result_{sort}"))
+                if sort == "best":
+                    station_lines.append(
+                        build_best_recommendation_explanation(stations, language)
+                    )
 
         if station.get("open_now") is True:
             station_lines.append(t(language, "station_open_now"))
@@ -396,18 +402,25 @@ def build_gas_stations_reply(
             station_lines.extend(
                 price_update_lines(selected_fuel.get("updated_at"), language=language)
             )
-        station_lines.append(t(language, "station_distance", distance=distance))
-
         road_miles = station.get("road_distance_miles")
-        road_minutes = station.get("road_eta_minutes")
-        if road_miles is not None and road_minutes is not None:
+        if road_miles is not None:
+            # This is the actual driving distance, not geographic miles.
             station_lines.append(
-                t(
-                    language,
-                    "station_road_distance",
-                    distance=road_miles,
-                    minutes=road_minutes,
+                t(language, "station_distance", distance=road_miles)
+            )
+            drive_minutes = station.get("road_eta_minutes")
+            if drive_minutes is not None:
+                station_lines.append(
+                    t(language, "station_drive_eta", minutes=drive_minutes)
                 )
+        elif result.get("routes_requested"):
+            # An unavailable route must never appear as an actual driving
+            # distance just because geographic coordinates exist.
+            station_lines.append(t(language, "station_route_unavailable"))
+        else:
+            # Routes is separately billable and disabled until configured.
+            station_lines.append(
+                t(language, "station_distance_estimated", distance=distance)
             )
 
         if address:
@@ -454,7 +467,7 @@ def build_best_recommendation_explanation(
     )
     closest = min(
         comparable,
-        key=lambda station: station["distance_miles"],
+        key=lambda station: station.get("road_distance_miles", station["distance_miles"]),
     )
 
     if winner is cheapest and winner is closest:

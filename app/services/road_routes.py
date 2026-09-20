@@ -1,7 +1,7 @@
 """Optional, capped Google Routes matrix enrichment for displayed stations.
 
-Only the selected stations are sent to Routes. Matrix results are supplementary:
-the existing straight-line ranking and best-option calculation remain unchanged.
+Only the five displayed candidates are sent to Routes. Driving-based ranking
+can reorder those candidates, but not the entire Places candidate pool.
 No route/Places responses are persisted or cached.
 """
 
@@ -11,6 +11,7 @@ import math
 import httpx
 
 from app.config import GOOGLE_MAPS_API_KEY, ROUTES_MAX_DESTINATIONS
+from app.utils.cost import calculate_estimated_cost
 
 logger = logging.getLogger(__name__)
 ROUTE_MATRIX_URL = "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
@@ -38,8 +39,8 @@ def add_road_routes(
     """Add real driving miles and ETA to available results with ONE HTTP call.
 
     Up to max_destinations matrix elements are billed independently. If Routes
-    is unavailable or gives incomplete data, keep the original stations and
-    straight-line distances instead of reporting fabricated road distances.
+    fails, keep the original station data; callers must not describe
+    geographical fallback distance as actual driving distance.
     """
     stations = result.get("stations", [])
     if not stations or not api_key:
@@ -129,6 +130,66 @@ def add_road_routes(
             1, math.ceil(duration_seconds / 60)
         )
 
-    # Do not mutate the original provider response; route failures never
-    # modify ranking, estimated cost or place data.
+    # Do not mutate the original provider response.
     return {**result, "stations": enriched}
+
+
+
+def rank_displayed_stations_by_road(
+    result: dict,
+    *,
+    sort: str,
+    gallons_needed: float,
+    vehicle_mpg: float,
+) -> dict:
+    """Use actual routes to rank the fetched/displayed candidates only.
+
+    Preserve the provider's open-before-unknown-hours policy. A destination
+    with no valid route must not be ranked as closest using geographic miles.
+    Price sort is left unchanged. Recalculate estimated round-trip cost from
+    driving miles when ranking 'best'; unknown-route candidates do not receive
+    a fabricated road-based cost.
+    """
+    stations = result.get("stations", [])
+    if sort == "price" or not any(
+        station.get("road_distance_miles") is not None for station in stations
+    ):
+        return result
+
+    updated = []
+    for station in stations:
+        item = station.copy()
+        road_miles = item.get("road_distance_miles")
+        if sort == "best":
+            price = item.get("selected_fuel", {}).get("price")
+            item["estimated_cost"] = (
+                calculate_estimated_cost(
+                    price_per_gallon=price,
+                    distance_miles=road_miles,
+                    gallons_needed=gallons_needed,
+                    vehicle_mpg=vehicle_mpg,
+                )
+                if road_miles is not None and price is not None
+                else None
+            )
+        updated.append(item)
+
+    def sort_key(station: dict) -> tuple:
+        road_miles = station.get("road_distance_miles")
+        open_priority = 0 if station.get("open_now") is True else 1
+        if sort == "best":
+            cost = station.get("estimated_cost")
+            return (
+                open_priority,
+                cost is None,
+                cost["estimated_total_cost"] if cost else float("inf"),
+                road_miles if road_miles is not None else float("inf"),
+            )
+        return (
+            open_priority,
+            road_miles is None,
+            road_miles if road_miles is not None else float("inf"),
+        )
+
+    updated.sort(key=sort_key)
+    return {**result, "stations": updated}

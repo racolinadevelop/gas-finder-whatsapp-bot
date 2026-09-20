@@ -56,8 +56,9 @@ boundaries, preserved behaviors, automated tests and the live smoke-test checkli
   - Premium
   - Diesel
 - Calculate approximate distance in miles
-- Optionally show driving distance and approximate ETA from a capped, explicitly
-  enabled Routes API matrix request (separately billable)
+- When the separately billed Routes API is enabled, show actual driving miles
+  as the main distance and an approximate ETA; re-rank the five displayed
+  candidates by driving distance or driving-based estimated cost
 - Search up to three Google Places pages by default (one or two can be configured
   to save calls, with reduced station coverage)
 - Sort gas stations by:
@@ -533,11 +534,15 @@ PostgreSQL-ready persistent subscription state ✅
 
 ## Current Limitations
 
-- Search radius and "best" rankings use geographic distance and the original
-  estimated cost. Results display a concise distance label; optional driving
-  miles and approximate ETA appear only if the separately billed Google Routes
-  API is explicitly enabled. Traffic is not included, and driving distance
-  can exceed the selected geographic search radius.
+- With Routes disabled, the bot labels its geographic distance as approximate.
+  Once Google Routes is enabled, the main distance is the driving route and
+  "closest"/"best" are recalculated among the five preselected stations using
+  their available routes. If a route fails, the bot says driving distance is
+  unavailable rather than passing off geographic miles as a road route.
+  Route estimates exclude live traffic. Provider candidate selection and
+  the requested search radius remain geographic to cap Routes billing, so a
+  station outside the preselected five cannot be discovered by road ranking;
+  actual road distance may exceed the chosen search radius.
 - Three Places pages improve coverage but do not guarantee that a particular
   station is returned. Set `GOOGLE_TEXT_MAX_PAGES=1` or `=2` for fewer API
   requests at the cost of potentially missing stations and cheaper prices.
@@ -561,9 +566,10 @@ Next product stages, in planned order:
 
 1. Complete post-refactor automated regression checks and the live WhatsApp
    smoke test after deployment.
-2. Optionally activate and verify capped road-distance and ETA enrichment
-   after enabling Google Routes API. Later, update ranking and estimated cost
-   to use driving distances safely.
+2. Enable Google Routes in the Cloud project and opt in on Railway to show
+   real driving distance/ETA and driving-based ranking among the five displayed
+   candidates. Verify real WhatsApp results and API-element costs before
+   increasing traffic or widening the candidate pool.
 3. Price-update timestamps and 48-hour age warnings are now shown in
    WhatsApp; continue monitoring provider coverage and compare real pump prices.
 4. Save user-level fuel/radius preferences separately from active conversations.

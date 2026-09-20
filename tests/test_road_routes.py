@@ -151,30 +151,52 @@ def test_location_search_only_invokes_routes_after_explicit_opt_in():
     assert events == [{"latitude": 38.25, "longitude": -85.75}]
 
 
-def test_whatsapp_reply_uses_concise_distance_and_optional_driving_eta():
+def test_whatsapp_reply_uses_real_driving_distance_as_its_only_distance():
     station = places(1)["stations"][0]
     station["road_distance_miles"] = 1.57
     station["road_eta_minutes"] = 5
-    reply = build_gas_stations_reply({"stations": [station]}, language="es")
-    assert "Distancia: 0.25 mi" in reply
+    reply = build_gas_stations_reply(
+        {"stations": [station], "routes_requested": True},
+        language="es",
+        sort="distance",
+    )
+    assert "Distancia: 1.57 mi" in reply
+    assert "Tiempo estimado: 5 min" in reply
+    assert "0.25 mi" not in reply
     assert "en línea recta" not in reply
-    assert "Por carretera: 1.57 mi · aprox. 5 min" in reply
+    assert "Por carretera:" not in reply
     assert "Cómo llegar:" not in reply
     assert "google.com/maps/dir/" not in reply
 
 
-def test_whatsapp_reply_has_no_directions_link_regardless_of_coordinates():
+def test_route_failure_does_not_misrepresent_geographic_miles_as_driving():
     station = places(1)["stations"][0]
-    for language, expected in [("en", "Distance: 0.25 mi"),
-                               ("es", "Distancia: 0.25 mi")]:
-        reply = build_gas_stations_reply({"stations": [station]}, language=language)
+    for language, expected in [
+        ("en", "Driving distance unavailable"),
+        ("es", "Distancia por carretera no disponible"),
+    ]:
+        reply = build_gas_stations_reply(
+            {"stations": [station], "routes_requested": True},
+            language=language,
+            sort="distance",
+        )
+        assert expected in reply
+        assert "0.25 mi" not in reply
+        assert "google.com/maps/dir/" not in reply
+
+
+def test_routes_disabled_keeps_geographic_distance_clearly_approximate():
+    station = places(1)["stations"][0]
+    for language, expected in [
+        ("en", "Approx. distance: 0.25 mi"),
+        ("es", "Distancia aproximada: 0.25 mi"),
+    ]:
+        reply = build_gas_stations_reply(
+            {"stations": [station]},
+            language=language,
+            sort="distance",
+        )
         assert expected in reply
         assert "straight line" not in reply
         assert "en línea recta" not in reply
-        assert "Driving directions:" not in reply
-        assert "Cómo llegar:" not in reply
         assert "google.com/maps/dir/" not in reply
-    station.pop("latitude")
-    reply = build_gas_stations_reply({"stations": [station]}, language="en")
-    assert "Distance: 0.25 mi" in reply
-    assert "google.com/maps/dir/" not in reply
