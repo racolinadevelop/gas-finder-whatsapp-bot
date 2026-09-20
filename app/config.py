@@ -66,9 +66,9 @@ SEARCH_RATE_LIMIT_WINDOW_SECONDS = positive_int_setting(
     5 * 60,
 )
 
-# Places Text Search may return up to three pages. Default to at most two
-# to control request volume; set to 3 to search more exhaustively.
-GOOGLE_TEXT_MAX_PAGES = positive_int_setting("GOOGLE_TEXT_MAX_PAGES", 2)
+# Places Text Search can return up to three pages. Prefer full coverage
+# so candidates on later pages (including Sam's Club) are not skipped.
+GOOGLE_TEXT_MAX_PAGES = positive_int_setting("GOOGLE_TEXT_MAX_PAGES", 3)
 if GOOGLE_TEXT_MAX_PAGES > 3:
     raise RuntimeError("GOOGLE_TEXT_MAX_PAGES must be between 1 and 3")
 
