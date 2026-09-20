@@ -15,6 +15,9 @@ class FakeStateHandlers:
     def distance_text(self, message, session):
         self.events.append(("distance_text", session.state))
 
+    def menu_interaction(self, message, session):
+        self.events.append(("menu", session.state))
+
     def fuel_interaction(self, message, session):
         self.events.append(("fuel", session.state))
 
@@ -44,6 +47,7 @@ def test_router_wiring_preserves_registered_types_states_and_dispatch():
         ConversationState.WAITING_CUSTOM_DISTANCE,
     )
     assert interactive_router.registered_states == (
+        ConversationState.MAIN_MENU,
         ConversationState.WAITING_FUEL,
         ConversationState.WAITING_SORT,
         ConversationState.WAITING_DISTANCE,
@@ -62,6 +66,7 @@ def test_router_wiring_preserves_registered_types_states_and_dispatch():
         sender=SENDER, message_type="interactive", selection_id="fuel_regular"
     )
     for state, label in [
+        (ConversationState.MAIN_MENU, "menu"),
         (ConversationState.WAITING_FUEL, "fuel"),
         (ConversationState.WAITING_SORT, "sort"),
         (ConversationState.WAITING_DISTANCE, "distance_button"),
