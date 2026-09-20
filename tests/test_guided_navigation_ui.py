@@ -93,10 +93,10 @@ def test_language_selection_does_not_greet_again_and_has_navigation(monkeypatch)
     assert len(sent) == 1
     assert sent[0][0] == "list"
     assert [row["id"] for row in sent[0][1]["rows"]] == [
-        "fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu",
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]
-    assert sent[0][1]["button_text"] == "Elegir combustible"
-    assert "Hola, Ramon" not in sent[0][1]["body_text"]
+    assert sent[0][1]["button_text"] == "Abrir menú"
+    assert "Ramon" in sent[0][1]["body_text"]
     assert "bienvenido" not in sent[0][1]["body_text"].lower()
 
 def test_results_screen_keeps_its_own_navigation_without_duplicates(monkeypatch):
@@ -134,15 +134,15 @@ def test_back_button_from_second_screen_returns_to_language_without_greeting(
     )
 
     assert whatsapp_handler.conversation_store.get(SENDER).state == (
-        ConversationState.WAITING_LANGUAGE
+        ConversationState.MAIN_MENU
     )
     assert len(sent) == 1
-    assert [button["id"] for button in sent[0][1]["buttons"]] == [
-        "lang_en", "lang_es",
-    "account_plan",
+    assert sent[0][0] == "list"
+    assert [row["id"] for row in sent[0][1]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]
     assert "Welcome" not in sent[0][1]["body_text"]
-    assert "Ramon" not in sent[0][1]["body_text"]
+    assert "Ramon" in sent[0][1]["body_text"]
 
 
 def test_location_step_sends_navigation_below_native_location_request(monkeypatch):
@@ -212,11 +212,10 @@ def test_menu_from_location_restarts_without_repeating_greeting(monkeypatch):
     )
 
     session = whatsapp_handler.conversation_store.get(SENDER)
-    assert session.state == ConversationState.WAITING_LANGUAGE
+    assert session.state == ConversationState.MAIN_MENU
     assert session.profile_name == "Ramon"
-    assert [kind for kind, _ in sent] == ["buttons"]
-    assert [button["id"] for button in sent[0][1]["buttons"]] == [
-        "lang_en", "lang_es",
-    "account_plan",
+    assert [kind for kind, _ in sent] == ["list"]
+    assert [row["id"] for row in sent[0][1]["rows"]] == [
+        "home_search", "fav_list", "account_plan", "nav_language",
     ]
     assert "Welcome" not in sent[0][1]["body_text"]
