@@ -15,6 +15,10 @@ from app.conversation import (
     RedisConversationStore,
 )
 from app.persistence import RedisClient, build_redis_client
+from app.preferences import (
+    InMemorySearchPreferencesStore,
+    PostgresSearchPreferencesStore,
+)
 from app.rate_limits import (
     InMemorySearchRateLimiter,
     RedisSearchRateLimiter,
@@ -39,6 +43,9 @@ class RuntimeState:
     subscription_store: (
         InMemorySubscriptionStore | PostgresSubscriptionStore
     )
+    search_preferences_store: (
+        InMemorySearchPreferencesStore | PostgresSearchPreferencesStore
+    )
     search_rate_limiter: SearchRateLimiter
     backend: str
     subscription_backend: str
@@ -61,9 +68,14 @@ def build_runtime_state(
             database_url,
             connect_fn=postgres_connect_fn,
         )
+        search_preferences_store = PostgresSearchPreferencesStore(
+            database_url,
+            connect_fn=postgres_connect_fn,
+        )
         subscription_backend = "postgres"
     else:
         subscription_store = InMemorySubscriptionStore()
+        search_preferences_store = InMemorySearchPreferencesStore()
         subscription_backend = "memory"
 
     if not redis_url:
@@ -73,6 +85,7 @@ def build_runtime_state(
                 ttl_seconds=dedup_ttl_seconds,
             ),
             subscription_store=subscription_store,
+            search_preferences_store=search_preferences_store,
             search_rate_limiter=InMemorySearchRateLimiter(
                 limit=search_rate_limit,
                 window_seconds=search_rate_window_seconds,
@@ -95,6 +108,7 @@ def build_runtime_state(
             ttl_seconds=dedup_ttl_seconds,
         ),
         subscription_store=subscription_store,
+            search_preferences_store=search_preferences_store,
         search_rate_limiter=RedisSearchRateLimiter(
             client,
             key_prefix=key_prefix,
