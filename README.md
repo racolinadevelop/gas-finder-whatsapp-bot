@@ -557,9 +557,10 @@ PostgreSQL-ready persistent subscription state ✅
 - Station prices and opening hours depend on provider coverage and freshness.
   Unknown hours are not proof that a station is open. HERE does not verify
   real-time open status.
-- The Free/Premium subscription storage and policy are present, but checkout,
-  billing webhooks, customer portal and paid feature enforcement are not
-  implemented. No real payments are collected by this project yet.
+- Free/Premium policy and storage are present. An opt-in Stripe TEST-only
+  Checkout/portal adapter and signed, observational test webhook are available;
+  payment-to-user binding, event reconciliation and paid feature enforcement
+  are not implemented yet. No real payments are collected by this project.
 - Automated tests mock external Meta/Google/HERE calls. A live WhatsApp
   smoke test is still required after deployment; see
   [Architecture and Refactor Closeout](docs/ARCHITECTURE.md).
@@ -579,10 +580,11 @@ Next product stages, in planned order:
    display intentionally hides update-time and opening-hour labels.
 4. User-level language, fuel, sorting and radius preferences now persist
    separately from the active conversation (implemented).
-5. Connect Stripe subscriptions in test mode: individual checkout links,
-   verified payment webhooks, a subscription-management portal and explicit
-   Free/Premium feature gates; do not enable live billing until paid features
-   and the full renewal/cancellation lifecycle have been tested.
+5. Stripe TEST-only Checkout/portal transport and signed webhook validation
+   are prepared behind a disabled-by-default flag. Next: persist a verified
+   Checkout-to-user binding, process lifecycle events idempotently, and gate
+   Premium features after confirmed paid status. Never enable live billing
+   before cancellation/renewal and test-mode end-to-end checks.
 6. Add favorites/history and price alerts, assigning appropriate Free/Premium
    access before enabling real charges.
 7. Automate reusable Meta/WhatsApp onboarding and improve production
@@ -625,3 +627,5 @@ If a credential is exposed accidentally, rotate it immediately.
 ## Status
 
 Project currently in active development.
+
+Stripe TEST-only integration and staged activation: [Billing Test Setup](docs/STRIPE_TEST_BILLING.md).

@@ -18,6 +18,20 @@ WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
 META_APP_SECRET = os.getenv("META_APP_SECRET")
 INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN")
 
+# Stripe integration is TEST ONLY and disabled by default. No entitlement
+# transitions or live billing are enabled by this configuration switch.
+STRIPE_TEST_MODE_ENABLED = os.getenv(
+    "STRIPE_TEST_MODE_ENABLED", "false"
+).lower() in {"1", "true", "yes"}
+STRIPE_TEST_SECRET_KEY = os.getenv("STRIPE_TEST_SECRET_KEY", "")
+STRIPE_TEST_PRICE_ID = os.getenv("STRIPE_TEST_PRICE_ID", "")
+STRIPE_TEST_WEBHOOK_SECRET = os.getenv("STRIPE_TEST_WEBHOOK_SECRET", "")
+STRIPE_TEST_SUCCESS_URL = os.getenv("STRIPE_TEST_SUCCESS_URL", "")
+STRIPE_TEST_CANCEL_URL = os.getenv("STRIPE_TEST_CANCEL_URL", "")
+STRIPE_TEST_PORTAL_RETURN_URL = os.getenv(
+    "STRIPE_TEST_PORTAL_RETURN_URL", ""
+)
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-astra")
 AI_INTENT_ENABLED = os.getenv("AI_INTENT_ENABLED", "false").lower() in {

@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.config import API_DOCS_ENABLED
+from app.routers.billing import router as billing_router
 from app.routers.gas_stations import router as gas_stations_router
 from app.routers.whatsapp import router as whatsapp_router
 
@@ -24,6 +25,7 @@ def create_app(*, api_docs_enabled: bool = API_DOCS_ENABLED) -> FastAPI:
 
     app.include_router(gas_stations_router)
     app.include_router(whatsapp_router)
+    app.include_router(billing_router)
 
     @app.get("/")
     def root():
