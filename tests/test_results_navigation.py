@@ -88,6 +88,7 @@ def test_menu_button_after_results_starts_over_without_repeating_greeting(
     assert "choose your preferred language" in sent[0]["body_text"]
     assert [button["id"] for button in sent[0]["buttons"]] == [
         "lang_en", "lang_es",
+    "account_plan",
     ]
 
 

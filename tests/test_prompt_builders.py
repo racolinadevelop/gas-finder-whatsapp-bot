@@ -20,6 +20,7 @@ def test_language_prompt_contains_language_buttons():
     assert [button["id"] for button in prompt.buttons] == [
         "lang_en",
         "lang_es",
+    "account_plan",
     ]
 
 

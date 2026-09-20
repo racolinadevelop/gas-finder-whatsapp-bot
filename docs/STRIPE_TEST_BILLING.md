@@ -83,8 +83,11 @@ https://docs.stripe.com/testing
    Expected for an approved paid/active subscription:
    `Sandbox linked: True`, `Sandbox subscription status: active`,
    `Sandbox Premium feature access: True`. Normal subscription records
-   remain untouched. The existing bot does not yet expose premium-only
-   WhatsApp experiences, so the admin status endpoint verifies the test gate.
+   remain untouched. WhatsApp now offers a read-only **Mi plan / My plan** button at language
+   selection and commands `mi plan` / `my plan` at any step. It reports the
+   verified Free/Premium test status without changing the current search.
+   This status view is not a public payment flow or a Premium-only feature;
+   the admin status endpoint remains the sandbox integration smoke check.
 7. Try `python scripts/stripe_sandbox_smoke.py portal` to obtain the
    authenticated user's Stripe TEST customer portal link. Cancel the
    subscription *immediately* in the Stripe test portal, or use Stripe

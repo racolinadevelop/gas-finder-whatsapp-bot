@@ -74,6 +74,7 @@ def build_language_prompt(
         buttons=[
             {"id": "lang_en", "title": "English"},
             {"id": "lang_es", "title": "Español"},
+            {"id": "account_plan", "title": "Mi plan / My plan"},
         ],
     )
 

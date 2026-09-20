@@ -16,6 +16,7 @@ from app.conversation import (
 )
 from app.intelligence import IntentType, MessageInterpretation
 from app.models import IncomingMessage
+from app.handlers.plan_messages import is_plan_command
 
 
 GREETINGS = {
@@ -41,6 +42,7 @@ def process_text_message(
     interpret: Callable[[str], MessageInterpretation],
     ensure_started: Callable[[str], ConversationSession],
     apply_decision: Callable[[str, SearchFlowDecision], None],
+    show_plan: Callable[[str], None] | None = None,
 ) -> None:
     """Prioritize navigation and current state before interpreting new text."""
     sender = incoming_message.sender
@@ -50,6 +52,10 @@ def process_text_message(
 
     if navigation_action is not None:
         navigate(sender, navigation_action)
+        return
+
+    if show_plan is not None and is_plan_command(text):
+        show_plan(sender)
         return
 
     if normalized_text in GREETINGS:

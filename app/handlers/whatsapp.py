@@ -4,6 +4,7 @@ from app.billing.test_store import PostgresTestBillingStore
 from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED
 from app.conversation import (
     ConversationSession,
+    ConversationState,
     ConversationTransitions,
     NavigationAction,
     SearchFlowDecision,
@@ -13,6 +14,7 @@ from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.interactive_messages import process_interactive_message
 from app.handlers.location_messages import process_location_message
 from app.handlers.location_results import run_location_search
+from app.handlers.plan_messages import build_plan_message
 from app.handlers.search_flow_delivery import deliver_search_flow_decision
 from app.handlers.text_messages import process_text_message
 from app.handlers.webhook_dispatch import process_webhook
@@ -179,6 +181,34 @@ def apply_search_flow_decision(
     )
 
 
+def handle_plan_status(sender: str) -> None:
+    """Show this WhatsApp sender's own plan without changing search state."""
+    session = conversation_store.get(sender)
+    language = (
+        session.language
+        if session is not None
+        and session.state not in {ConversationState.NEW, ConversationState.WAITING_LANGUAGE}
+        else "both"
+    )
+    try:
+        regular_premium = subscription_service.get_subscription(sender).has_premium_access
+        test_status = None
+        if test_billing_store is not None:
+            record = test_billing_store.get_test_subscription(sender)
+            test_status = record["status"] if record is not None else None
+        message = build_plan_message(
+            language, regular_premium=regular_premium, test_status=test_status,
+        )
+    except Exception:
+        logger.warning("Could not check WhatsApp plan status")
+        message = (
+            "⚠️ No pude consultar tu plan ahora. Inténtalo de nuevo."
+            if language == "es"
+            else "⚠️ Couldn't check your plan right now. Please try again."
+        )
+    send_text_message(to=sender, message=message)
+
+
 def handle_text_message(incoming_message: IncomingMessage) -> None:
     process_text_message(
         incoming_message,
@@ -191,6 +221,7 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         interpret=intent_interpreter.interpret,
         ensure_started=conversation_transitions.ensure_started,
         apply_decision=apply_search_flow_decision,
+        show_plan=handle_plan_status,
     )
 
 
@@ -203,6 +234,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         select_language=conversation_state_handlers.language_selection,
         dispatch_state_interactive=interactive_state_router.dispatch,
         send_expected=send_expected_prompt,
+        show_plan=handle_plan_status,
     )
 
 

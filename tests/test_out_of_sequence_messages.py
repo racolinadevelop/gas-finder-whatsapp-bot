@@ -141,4 +141,5 @@ def test_menu_still_resets_flow_while_waiting_for_location(monkeypatch):
     assert [button["id"] for button in sent[0]["buttons"]] == [
         "lang_en",
         "lang_es",
+    "account_plan",
     ]
