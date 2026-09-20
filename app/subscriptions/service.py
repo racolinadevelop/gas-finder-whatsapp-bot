@@ -1,10 +1,5 @@
 from typing import Protocol
 
-
-class TestEntitlementStore(Protocol):
-    def has_premium_access(self, whatsapp_id: str) -> bool: ...
-
-
 from app.subscriptions.models import (
     Feature,
     SubscriptionPlan,
@@ -15,6 +10,10 @@ from app.subscriptions.store import (
     InMemorySubscriptionStore,
     SubscriptionStore,
 )
+
+
+class TestEntitlementStore(Protocol):
+    def has_premium_access(self, whatsapp_id: str) -> bool: ...
 
 
 FREE_FEATURES = frozenset(
