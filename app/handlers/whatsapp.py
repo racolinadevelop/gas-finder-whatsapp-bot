@@ -64,9 +64,14 @@ subscription_service = SubscriptionService(
     runtime_state.subscription_store, test_entitlements=test_billing_store,
 )
 location_search_service = LocationSearchService()
-favorites_store = (
-    PostgresFavoriteStore(DATABASE_URL) if DATABASE_URL else InMemoryFavoriteStore()
-)
+try:
+    favorites_store = (
+        PostgresFavoriteStore(DATABASE_URL) if DATABASE_URL else InMemoryFavoriteStore()
+    )
+except Exception:
+    # Optional Premium storage must not prevent free gas searches from starting.
+    logger.exception("Could not initialize favorite station storage")
+    favorites_store = None
 conversation_transitions = ConversationTransitions(conversation_store)
 message_deduplicator = runtime_state.message_deduplicator
 search_rate_limiter = runtime_state.search_rate_limiter
@@ -227,9 +232,12 @@ def favorite_language(sender: str) -> str:
     } else "es"
 
 
-def handle_favorite_action(sender: str, action: str, index: int | None) -> None:
+def handle_favorite_action(
+    sender: str, action: str, index: int | None,
+    preferred_language: str | None = None,
+) -> None:
     """Operate only on the authenticated Meta webhook sender, never a supplied ID."""
-    language = favorite_language(sender)
+    language = preferred_language or favorite_language(sender)
     spanish = language == "es"
     try:
         if not subscription_service.can_use_feature(sender, Feature.FAVORITES):
@@ -245,6 +253,9 @@ def handle_favorite_action(sender: str, action: str, index: int | None) -> None:
                 ),
             )
             return
+
+        if favorites_store is None:
+            raise RuntimeError("Favorites storage is unavailable")
 
         if action == "list":
             favorites = favorites_store.list_favorites(sender)
@@ -321,6 +332,8 @@ def save_recent_if_premium(
 ) -> bool:
     if not subscription_service.can_use_feature(sender, Feature.FAVORITES):
         return False
+    if favorites_store is None:
+        return False
     favorites_store.record_results(sender, stations)
     return True
 
@@ -337,7 +350,17 @@ def handle_text_message(incoming_message: IncomingMessage) -> None:
         ensure_started=conversation_transitions.ensure_started,
         apply_decision=apply_search_flow_decision,
         show_plan=handle_plan_status,
-        show_favorite=handle_favorite_action,
+        show_favorite=lambda sender, action, index: handle_favorite_action(
+            sender, action, index,
+            preferred_language=(
+                "en" if (incoming_message.text or "").strip().casefold().startswith(
+                    ("my ", "save", "remove", "favorites")
+                ) else "es"
+                if (incoming_message.text or "").strip().casefold().startswith(
+                    ("mis ", "guardar", "eliminar", "borrar", "favoritas")
+                ) else None
+            ),
+        ),
     )
 
 
