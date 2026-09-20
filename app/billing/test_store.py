@@ -112,6 +112,27 @@ class PostgresTestBillingStore:
                 )
                 return cur.fetchone()
 
+    def get_test_subscription(self, whatsapp_id: str) -> dict | None:
+        """Read test-only status for an authenticated admin or feature gate."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT customer_id, subscription_id, status
+                    FROM stripe_test_entitlements
+                    WHERE whatsapp_id_hash = %s
+                    """,
+                    (user_hash(whatsapp_id),),
+                )
+                row = cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "customer_id": row[0],
+            "subscription_id": row[1],
+            "status": row[2],
+        }
+
     def has_premium_access(self, whatsapp_id: str) -> bool:
         with self._connect() as conn:
             with conn.cursor() as cur:
