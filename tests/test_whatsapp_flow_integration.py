@@ -553,7 +553,13 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     )
 
 
-def test_language_choice_is_remembered_and_change_language_is_explicit(bot):
+def test_language_choice_is_remembered_and_change_language_is_explicit(bot, monkeypatch):
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    monkeypatch.setattr(
+        handler, "subscription_service",
+        SubscriptionService(InMemorySubscriptionStore()),
+    )
     bot.text("hola")
     bot.assert_sent("buttons")
     assert handler.conversation_store.get(SENDER).state == (
