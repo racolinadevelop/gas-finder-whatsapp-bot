@@ -91,7 +91,8 @@ def test_gateway_checkout_never_sends_raw_whatsapp_id_or_uses_live_key(monkeypat
 
     monkeypatch.setattr("app.billing.stripe_test.httpx.post", fake_post)
     result = StripeTestGateway(settings()).create_checkout("15551234567")
-    assert result == {"url": "https://checkout.stripe.com/c/pay/cs_test_123"}
+    assert result == {"url": "https://checkout.stripe.com/c/pay/cs_test_123",
+                      "session_id": "cs_test_123"}
     assert len(calls) == 1
     url, data, auth = calls[0]
     assert url == "https://api.stripe.com/v1/checkout/sessions"
@@ -176,6 +177,14 @@ def client(monkeypatch):
     monkeypatch.setattr(
         billing, "STRIPE_TEST_PORTAL_RETURN_URL", settings().portal_return_url
     )
+    class UnlinkedStore:
+        def find_checkout(self, _session_id):
+            return None
+
+        def get_test_subscription(self, _whatsapp_id):
+            return None
+
+    monkeypatch.setattr(billing, "_store", lambda: UnlinkedStore())
     yield TestClient(app)
 
 
