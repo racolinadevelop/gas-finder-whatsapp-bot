@@ -73,7 +73,7 @@ def test_naive_test_clock_is_rejected():
     ("en", "Provider price update"),
     ("es", "Actualización del precio según proveedor"),
 ])
-def test_whatsapp_reply_displays_selected_fuel_update_and_stale_warning(
+def test_whatsapp_reply_hides_selected_fuel_update_and_stale_warning(
     language, expected,
 ):
     station = {
@@ -89,13 +89,13 @@ def test_whatsapp_reply_displays_selected_fuel_update_and_stale_warning(
     message = build_gas_stations_reply(
         {"stations": [station]}, language=language, sort="distance"
     )
-    assert expected in message
-    assert "2020-01-02 03:04 UTC" in message
-    assert ("48+ hours old" if language == "en" else "48+ horas") in message
+    assert expected not in message
+    assert "2020-01-02 03:04 UTC" not in message
+    assert ("48+ hours old" if language == "en" else "48+ horas") not in message
     assert "$2.990/gal" in message
 
 
-def test_unknown_price_date_gets_note_but_unavailable_price_gets_no_update():
+def test_unknown_price_date_does_not_add_note_and_missing_price_is_shown():
     base = {
         "name": "Example",
         "distance_miles": 0.5,
@@ -107,7 +107,8 @@ def test_unknown_price_date_gets_note_but_unavailable_price_gets_no_update():
         }}]},
         sort="distance",
     )
-    assert "Price update time unavailable" in with_price
+    assert "Price update time unavailable" not in with_price
+    assert "$3.010/gal" in with_price
     assert "48+ hours old" not in with_price
 
     without_price = build_gas_stations_reply(
@@ -162,8 +163,8 @@ def test_google_price_timestamp_reuses_existing_places_response(monkeypatch):
     assert result["stations"][0]["selected_fuel"]["updated_at"] == (
         "2020-01-02T03:04:00Z"
     )
-    assert "2020-01-02 03:04 UTC" in text
-    assert "48+ hours old" in text
+    assert "2020-01-02 03:04 UTC" not in text
+    assert "48+ hours old" not in text
 
 
 def test_here_price_timestamp_reuses_existing_provider_response(monkeypatch):
@@ -201,5 +202,5 @@ def test_here_price_timestamp_reuses_existing_provider_response(monkeypatch):
     assert result["stations"][0]["selected_fuel"]["updated_at"] == (
         "2020-01-02T03:04:00Z"
     )
-    assert "2020-01-02 03:04 UTC" in text
-    assert "48+ horas" in text
+    assert "2020-01-02 03:04 UTC" not in text
+    assert "48+ horas" not in text

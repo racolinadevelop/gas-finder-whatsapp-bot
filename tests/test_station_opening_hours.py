@@ -52,7 +52,7 @@ def test_only_explicit_google_boolean_establishes_open_status(hours, expected):
     assert parse_open_now({"currentOpeningHours": hours}) is expected
 
 
-def test_google_filters_closed_stations_but_keeps_unknown_as_labelled_fallback(
+def test_google_filters_closed_stations_but_keeps_unknown_as_fallback(
     monkeypatch,
 ):
     captured = {}
@@ -96,8 +96,10 @@ def test_google_filters_closed_stations_but_keeps_unknown_as_labelled_fallback(
     reply = build_gas_stations_reply(result, language="es", sort="price")
     assert "Sam's Club" not in reply
     assert "Not Operating" not in reply
-    assert "🟢 Abierta ahora (según Google)" in reply
-    assert "⚪ Horario no disponible" in reply
+    assert "Abierta ahora" not in reply
+    assert "Horario no disponible" not in reply
+    assert "BP Open" in reply
+    assert "Unknown Hours" in reply
 
 
 def test_all_google_stations_explicitly_closed_yields_no_results(monkeypatch):
@@ -152,7 +154,8 @@ def test_unverified_hours_never_display_as_open_in_whatsapp():
         language="en",
         sort="distance",
     )
-    assert "Opening hours unavailable" in reply
+    assert "No schedule" in reply
+    assert "Opening hours unavailable" not in reply
     assert "Open now" not in reply
 
 
@@ -181,5 +184,43 @@ def test_here_fuel_price_does_not_imply_station_is_open(monkeypatch):
     )
     assert result["stations"][0]["open_now"] is None
     reply = build_gas_stations_reply(result, language="es")
-    assert "Horario no disponible" in reply
+    assert "Here Station" in reply
+    assert "Horario no disponible" not in reply
     assert "Abierta ahora" not in reply
+
+
+@pytest.mark.parametrize("language", ["es", "en"])
+def test_whatsapp_excludes_confirmed_closed_station_and_counts_visible_only(language):
+    def station(name, hours):
+        return {
+            "name": name,
+            "open_now": hours,
+            "distance_miles": 1.0,
+            "selected_fuel": {"available": True, "price": 3.00},
+        }
+
+    reply = build_gas_stations_reply(
+        {"stations": [station("Closed", False), station("Unknown", None),
+                      station("Open", True)], "count": 3},
+        language=language,
+        sort="distance",
+    )
+    assert "1️⃣ Unknown" in reply
+    assert "2️⃣ Open" in reply
+    assert "Closed" not in reply
+    assert ("Resultados mostrados: 2" if language == "es"
+            else "Results shown: 2") in reply
+    assert "Horario no disponible" not in reply
+    assert "Opening hours unavailable" not in reply
+
+
+@pytest.mark.parametrize("language", ["es", "en"])
+def test_whatsapp_all_confirmed_closed_returns_no_results(language):
+    reply = build_gas_stations_reply(
+        {"stations": [{"name": "Closed", "open_now": False}]},
+        language=language,
+        sort="distance",
+    )
+    assert "Closed" not in reply
+    assert ("No encontré gasolineras" if language == "es"
+            else "I couldn't find nearby gas stations") in reply

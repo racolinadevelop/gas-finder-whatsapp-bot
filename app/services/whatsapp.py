@@ -2,7 +2,6 @@ import httpx
 from app.intelligence import RuleBasedIntentInterpreter
 from app.i18n import t
 from app.models import IncomingMessage
-from app.presentation.price_freshness import price_update_lines
 
 from app.config import (
     WHATSAPP_ACCESS_TOKEN,
@@ -306,7 +305,12 @@ def build_gas_stations_reply(
     sort: str = "best",
     max_distance_miles: float | None = None,
 ) -> str:
-    stations = result.get("stations", [])
+    # Do not display confirmed-closed stations, even if a provider returns one.
+    # Unknown hours are not proof of closure; keep those stations eligible.
+    stations = [
+        station for station in result.get("stations", [])
+        if station.get("open_now") is not False
+    ]
 
     fuel_name = t(language, f"fuel_{fuel_type}")
     sort_name = t(language, f"sort_{sort}")
@@ -388,20 +392,9 @@ def build_gas_stations_reply(
                         build_best_recommendation_explanation(stations, language)
                     )
 
-        if station.get("open_now") is True:
-            station_lines.append(t(language, "station_open_now"))
-        else:
-            # Both HERE and Google without opening-hour data are unknown.
-            # Explicitly closed Google stations are filtered before this step.
-            station_lines.append(t(language, "station_hours_unknown"))
-
         station_lines.append(
             t(language, "station_price", fuel=fuel_name, price=price_text)
         )
-        if price is not None:
-            station_lines.extend(
-                price_update_lines(selected_fuel.get("updated_at"), language=language)
-            )
         road_miles = station.get("road_distance_miles")
         if road_miles is not None:
             # This is the actual driving distance, not geographic miles.
