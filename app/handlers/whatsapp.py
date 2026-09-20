@@ -10,6 +10,7 @@ from app.conversation import (
 from app.conversation.options import LANGUAGE_BUTTONS
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.interactive_messages import process_interactive_message
+from app.handlers.location_messages import process_location_message
 from app.handlers.location_results import run_location_search
 from app.handlers.search_flow_delivery import deliver_search_flow_decision
 from app.handlers.text_messages import GREETINGS, process_text_message
@@ -207,25 +208,13 @@ def search_from_location(
     )
 
 def handle_location_message(incoming_message: IncomingMessage) -> None:
-    if (
-        incoming_message.latitude is None
-        or incoming_message.longitude is None
-    ):
-        return
-
-    sender = incoming_message.sender
-    session = conversation_store.get(sender)
-
-    if session is None:
-        search_from_location(
-            incoming_message,
-            ConversationSession(sender=sender),
-        )
-        return
-
-    if not location_state_router.dispatch(incoming_message, session):
-        send_expected_prompt(sender, session)
-
+    process_location_message(
+        incoming_message,
+        get_session=conversation_store.get,
+        search_from_location=search_from_location,
+        dispatch_state_location=location_state_router.dispatch,
+        send_expected=send_expected_prompt,
+    )
 
 def handle_unsupported_message(incoming_message: IncomingMessage) -> None:
     logger.info(
