@@ -94,7 +94,7 @@ def test_language_button_works_at_language_selection(monkeypatch):
     sent = []
     monkeypatch.setattr(
         whatsapp_handler,
-        "send_list_message",
+        "send_reply_buttons",
         lambda **kwargs: sent.append(kwargs),
     )
 
@@ -109,10 +109,10 @@ def test_language_button_works_at_language_selection(monkeypatch):
     session = whatsapp_handler.conversation_store.get(SENDER)
     assert session.state == ConversationState.WAITING_FUEL
     assert session.language == "es"
-    assert [button["id"] for button in sent[0]["rows"]] == [
+    assert [button["id"] for button in sent[0]["buttons"]] == [
         "fuel_regular",
         "fuel_premium",
-        "fuel_diesel", "nav_back", "nav_menu",
+        "fuel_diesel",
     ]
 
 

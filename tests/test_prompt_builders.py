@@ -36,9 +36,10 @@ def test_spanish_fuel_prompt_can_include_welcome_and_error():
 
     assert "bienvenido" in prompt.body_text.casefold()
     assert "no corresponde" in prompt.body_text.casefold()
-    assert isinstance(prompt, ListPrompt)
-    assert [row["id"] for row in prompt.rows] == [
-        "fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu",
+    assert [button["id"] for button in prompt.buttons] == [
+        "fuel_regular",
+        "fuel_premium",
+        "fuel_diesel",
     ]
 
 
@@ -63,9 +64,10 @@ def test_sort_prompt_describes_selected_fuel():
     prompt = build_sort_prompt(session, selected=True)
 
     assert "Diésel" in prompt.body_text
-    assert isinstance(prompt, ListPrompt)
-    assert [row["id"] for row in prompt.rows] == [
-        "sort_distance", "sort_price", "sort_best", "nav_back", "nav_menu",
+    assert [button["id"] for button in prompt.buttons] == [
+        "sort_distance",
+        "sort_price",
+        "sort_best",
     ]
 
 
@@ -84,7 +86,7 @@ def test_distance_prompt_contains_presets_and_custom_option():
         "distance_3",
         "distance_5",
         "distance_10",
-        "distance_custom", "nav_back", "nav_menu",
+        "distance_custom",
     ]
 
 
@@ -163,23 +165,3 @@ def test_initial_language_prompt_has_no_navigation_hint():
     assert "Hi, Ramon!" in prompt.body_text
     assert "back" not in prompt.body_text.lower()
     assert "menu" not in prompt.body_text.lower()
-
-
-def test_spanish_fuel_and_sort_lists_contain_navigation():
-    fuel = build_fuel_prompt("es")
-    sort = build_sort_prompt(
-        ConversationSession(
-            sender="sender",
-            state=ConversationState.WAITING_SORT,
-            language="es",
-        )
-    )
-    for prompt in (fuel, sort):
-        assert isinstance(prompt, ListPrompt)
-        assert len(prompt.rows) == 5
-        assert [row["id"] for row in prompt.rows[-2:]] == [
-            "nav_back", "nav_menu",
-        ]
-        assert [row["title"] for row in prompt.rows[-2:]] == [
-            "⬅️ Atrás", "🏠 Menú",
-        ]

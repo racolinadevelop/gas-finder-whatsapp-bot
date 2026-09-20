@@ -29,7 +29,7 @@ def test_language_selection_shows_fuel_options_without_repeating_greeting():
     )
 
     assert store.get("sender").state == ConversationState.WAITING_FUEL
-    assert isinstance(sent[0][1], ListPrompt)
+    assert isinstance(sent[0][1], ReplyButtonsPrompt)
     assert "¡Hola, Ramon!" not in sent[0][1].body_text
     assert "Para comenzar" in sent[0][1].body_text
     assert store.get("sender").profile_name == "Ramon"
@@ -71,7 +71,7 @@ def test_invalid_fuel_button_repeats_expected_prompt():
         session,
     )
 
-    assert isinstance(sent[0][1], ListPrompt)
+    assert isinstance(sent[0][1], ReplyButtonsPrompt)
     assert "doesn't match" in sent[0][1].body_text
 
 

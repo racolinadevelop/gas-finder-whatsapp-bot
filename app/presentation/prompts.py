@@ -78,20 +78,12 @@ def build_language_prompt(
     )
 
 
-def _navigation_rows(language: str) -> list[dict]:
-    """Show global navigation inside the same interactive list."""
-    return [
-        {"id": "nav_back", "title": t(language, "button_nav_back")},
-        {"id": "nav_menu", "title": t(language, "button_nav_menu")},
-    ]
-
-
 def build_fuel_prompt(
     language: str,
     welcome: bool = False,
     error: bool = False,
     display_name: str | None = None,
-) -> ListPrompt:
+) -> ReplyButtonsPrompt:
     body_parts = []
 
     if welcome:
@@ -110,15 +102,21 @@ def build_fuel_prompt(
         ]
     )
 
-    return ListPrompt(
+    return ReplyButtonsPrompt(
         body_text="\n\n".join(body_parts),
-        button_text=t(language, "fuel_list_button"),
-        section_title=t(language, "fuel_list_section"),
-        rows=[
-            {"id": "fuel_regular", "title": t(language, "button_fuel_regular")},
-            {"id": "fuel_premium", "title": t(language, "button_fuel_premium")},
-            {"id": "fuel_diesel", "title": t(language, "button_fuel_diesel")},
-            *_navigation_rows(language),
+        buttons=[
+            {
+                "id": "fuel_regular",
+                "title": t(language, "button_fuel_regular"),
+            },
+            {
+                "id": "fuel_premium",
+                "title": t(language, "button_fuel_premium"),
+            },
+            {
+                "id": "fuel_diesel",
+                "title": t(language, "button_fuel_diesel"),
+            },
         ],
     )
 
@@ -127,7 +125,7 @@ def build_sort_prompt(
     session: ConversationSession,
     selected: bool = False,
     error: bool = False,
-) -> ListPrompt:
+) -> ReplyButtonsPrompt:
     language = session.language
     body_parts = []
 
@@ -148,15 +146,21 @@ def build_sort_prompt(
         ]
     )
 
-    return ListPrompt(
+    return ReplyButtonsPrompt(
         body_text="\n\n".join(body_parts),
-        button_text=t(language, "sort_list_button"),
-        section_title=t(language, "sort_list_section"),
-        rows=[
-            {"id": "sort_distance", "title": t(language, "button_sort_distance")},
-            {"id": "sort_price", "title": t(language, "button_sort_price")},
-            {"id": "sort_best", "title": t(language, "button_sort_best")},
-            *_navigation_rows(language),
+        buttons=[
+            {
+                "id": "sort_distance",
+                "title": t(language, "button_sort_distance"),
+            },
+            {
+                "id": "sort_price",
+                "title": t(language, "button_sort_price"),
+            },
+            {
+                "id": "sort_best",
+                "title": t(language, "button_sort_best"),
+            },
         ],
     )
 
@@ -190,7 +194,6 @@ def build_distance_prompt(
             "description": t(language, "distance_custom_description"),
         }
     )
-    rows.extend(_navigation_rows(language))
 
     return ListPrompt(
         body_text="\n\n".join(body_parts),
