@@ -1,5 +1,7 @@
 import logging
 
+from app.billing.test_store import PostgresTestBillingStore
+from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED
 from app.conversation import (
     ConversationSession,
     ConversationTransitions,
@@ -45,7 +47,13 @@ runtime_state = build_runtime_state()
 conversation_store = runtime_state.conversation_store
 search_preferences_store = runtime_state.search_preferences_store
 intent_interpreter = build_intent_interpreter()
-subscription_service = SubscriptionService(runtime_state.subscription_store)
+test_billing_store = (
+    PostgresTestBillingStore(DATABASE_URL)
+    if STRIPE_TEST_MODE_ENABLED and DATABASE_URL else None
+)
+subscription_service = SubscriptionService(
+    runtime_state.subscription_store, test_entitlements=test_billing_store,
+)
 location_search_service = LocationSearchService()
 conversation_transitions = ConversationTransitions(conversation_store)
 message_deduplicator = runtime_state.message_deduplicator
