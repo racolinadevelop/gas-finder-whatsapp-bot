@@ -8,6 +8,14 @@ def parse_favorite_action(
     selection_id: str | None = None,
 ) -> tuple[str, int | str | None] | None:
     if selection_id:
+        if selection_id == "fav_compare":
+            return ("compare_menu", None)
+        page = re.fullmatch(r"fav_compare_page_([12])", selection_id)
+        if page:
+            return ("compare_page", int(page.group(1)))
+        fuel = re.fullmatch(r"fav_fuel_(regular|premium|diesel)", selection_id)
+        if fuel:
+            return ("compare_fuel", fuel.group(1))
         if selection_id in {"fav_list", "fav_remove_back"}:
             return ("list", None)
         if selection_id == "fav_remove_menu":
