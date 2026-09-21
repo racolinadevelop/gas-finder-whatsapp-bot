@@ -1,7 +1,7 @@
 import logging
 
 from app.billing.test_store import PostgresTestBillingStore
-from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED
+from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED, GAS_STATION_PROVIDER
 from app.conversation import (
     ConversationSession,
     ConversationState,
@@ -16,6 +16,7 @@ from app.favorites import (
     PostgresFavoriteStore,
 )
 from app.favorites.models import FavoriteStation
+from app.favorites.comparison import compare_saved_places, format_favorite_comparison
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.interactive_messages import process_interactive_message
 from app.handlers.location_messages import process_location_message
@@ -44,6 +45,10 @@ from app.presentation.prompts import (
     build_favorite_removal_prompt,
     build_plan_navigation_prompt,
     build_favorites_result_navigation_prompt,
+    build_favorites_compare_pages_prompt,
+    build_favorites_compare_fuel_prompt,
+    build_favorites_compare_location_prompt,
+    build_favorites_compare_results_prompt,
 )
 from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
