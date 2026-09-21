@@ -336,9 +336,9 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_LANGUAGE
     )
-    bot.assert_sent("buttons", "text")
-    assert "Premium (test)" in bot.sent[-1][1]["message"]
-    assert "Premium (prueba)" in bot.sent[-1][1]["message"]
+    bot.assert_sent("buttons", "text", "buttons")
+    assert "Premium (test)" in bot.sent[-2][1]["message"]
+    assert "Premium (prueba)" in bot.sent[-2][1]["message"]
 
     bot.sent.clear()
     bot.button("lang_es")
@@ -351,7 +351,8 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
     bot.sent.clear()
 
     bot.text("  MI   PLAN  ")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["home_search", "fav_list", "nav_language", "nav_menu"])
     assert "Premium (prueba de Stripe)" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER) == original
     assert bot.searches == []
@@ -359,7 +360,7 @@ def test_my_plan_shows_real_sandbox_access_without_resetting_search(bot, monkeyp
     ledger.status = "canceled"
     bot.sent.clear()
     bot.text("mi plan")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
     assert "Tu plan actual: Gratis" in bot.sent[0][1]["message"]
     assert "cancelada" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER) == original
@@ -420,7 +421,8 @@ def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeyp
 
     bot.sent.clear()
     bot.button("fav_save_1", kind="list_reply")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["home_search", "fav_list", "fav_remove_menu", "nav_menu"])
     assert "Guardada" in bot.sent[0][1]["message"]
     assert "Example Station" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER) == original
@@ -428,7 +430,7 @@ def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeyp
 
     bot.sent.clear()
     bot.text("mis favoritas")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
     assert "123 Main St" in bot.sent[0][1]["message"]
     assert store.list_favorites(SENDER) == stations
 
@@ -578,7 +580,8 @@ def test_language_choice_is_remembered_and_change_language_is_explicit(bot, monk
     # free users receive the Premium gate rather than an invalid-step prompt.
     bot.sent.clear()
     bot.button("fav_list", kind="list_reply")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["home_search", "account_plan", "nav_menu"])
     assert "requiere Premium" in bot.sent[-1][1]["message"]
     assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
     assert bot.searches == []
