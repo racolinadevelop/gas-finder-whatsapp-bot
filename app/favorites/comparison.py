@@ -97,8 +97,12 @@ def compare_saved_places(
             item for item in raw_fuels
             if isinstance(item, dict)
             and isinstance(item.get("price"), dict)
-            and isinstance(item["price"].get("units"), int)
-            and not isinstance(item["price"]["units"], bool)
+            and (
+                (isinstance(item["price"].get("units"), int)
+                 and not isinstance(item["price"]["units"], bool))
+                or (isinstance(item["price"].get("units"), str)
+                    and item["price"]["units"].isdigit())
+            )
             and isinstance(item["price"].get("nanos", 0), int)
             and item["price"].get("currencyCode") == "USD"
         ]
