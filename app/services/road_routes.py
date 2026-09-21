@@ -10,7 +10,7 @@ import math
 
 import httpx
 
-from app.config import APP_ENV, GOOGLE_MAPS_API_KEY, ROUTES_MAX_DESTINATIONS
+from app.config import APP_ENV, GOOGLE_MAPS_API_KEY, ROUTES_API_ENABLED, ROUTES_MAX_DESTINATIONS
 from app.services.route_budget import reserve_production_route_elements
 from app.utils.cost import calculate_estimated_cost
 
@@ -44,6 +44,10 @@ def add_road_routes(
     geographical fallback distance as actual driving distance.
     """
     stations = result.get("stations", [])
+    # The production kill switch applies at the shared HTTP boundary too,
+    # not only to the two current callers that normally check this flag.
+    if APP_ENV == "production" and not ROUTES_API_ENABLED:
+        return result
     if not stations or not api_key:
         return result
 
