@@ -412,11 +412,18 @@ def handle_favorite_action(
             if not favorites:
                 action = "list"
             elif action == "compare_menu":
-                send_account_actions(
-                    sender, build_favorites_compare_pages_prompt(
-                        language, len(favorites),
-                    ),
-                )
+                if len(favorites) <= 5:
+                    session = conversation_transitions.apply(sender, {
+                        "state": ConversationState.WAITING_FAVORITES_FUEL,
+                        "favorite_page": 1,
+                    })
+                    send_state_prompt(sender, session)
+                else:
+                    send_account_actions(
+                        sender, build_favorites_compare_pages_prompt(
+                            language, len(favorites),
+                        ),
+                    )
                 return
             elif action == "compare_page":
                 if (
