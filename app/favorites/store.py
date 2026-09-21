@@ -187,6 +187,26 @@ class PostgresFavoriteStore:
                 """, (user_key(whatsapp_id), MAX_FAVORITES))
                 return tuple(FavoriteStation(*row) for row in cur.fetchall())
 
+    def remove_by_digest(self, whatsapp_id: str, digest: str) -> FavoriteStation:
+        hashed = user_key(whatsapp_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (hashed,))
+                cur.execute("""
+                    SELECT station_key, name, address
+                    FROM premium_favorite_stations
+                    WHERE whatsapp_id_hash = %s
+                """, (hashed,))
+                for row in cur.fetchall():
+                    station = FavoriteStation(*row)
+                    if sha256(station.key.encode()).hexdigest() == digest:
+                        cur.execute("""
+                            DELETE FROM premium_favorite_stations
+                            WHERE whatsapp_id_hash = %s AND station_key = %s
+                        """, (hashed, station.key))
+                        return station
+        raise FavoriteStoreError("missing_favorite")
+
     def remove_favorite(self, whatsapp_id: str, index: int) -> FavoriteStation:
         if not 1 <= index <= MAX_FAVORITES:
             raise FavoriteStoreError("missing_favorite")
