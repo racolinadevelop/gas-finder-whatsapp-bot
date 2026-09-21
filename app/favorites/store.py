@@ -71,6 +71,14 @@ class InMemoryFavoriteStore:
         with self._lock:
             return tuple(self._favorites.get(user_key(whatsapp_id), []))
 
+    def remove_by_digest(self, whatsapp_id: str, digest: str) -> FavoriteStation:
+        with self._lock:
+            favorites = self._favorites.get(user_key(whatsapp_id), [])
+            for index, station in enumerate(favorites):
+                if sha256(station.key.encode()).hexdigest() == digest:
+                    return favorites.pop(index)
+        raise FavoriteStoreError("missing_favorite")
+
     def remove_favorite(self, whatsapp_id: str, index: int) -> FavoriteStation:
         with self._lock:
             favorites = self._favorites.get(user_key(whatsapp_id), [])
