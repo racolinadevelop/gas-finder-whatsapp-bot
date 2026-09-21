@@ -438,7 +438,7 @@ def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeyp
     ledger.active = False
     bot.sent.clear()
     bot.text("mis favoritas")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
     assert "requiere Premium" in bot.sent[0][1]["message"]
     assert "123 Main St" not in bot.sent[0][1]["message"]
 
@@ -517,7 +517,7 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     bot.sent.clear()
 
     bot.text("Mi favorita")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
     assert "requiere Premium" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_LANGUAGE
@@ -530,7 +530,7 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     assert original.state == ConversationState.MAIN_MENU
 
     bot.text("Mi favorita")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
     assert "requiere Premium" in bot.sent[0][1]["message"]
     assert "Esa opción no corresponde" not in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER) == original
@@ -543,7 +543,7 @@ def test_singular_mi_favorita_is_handled_globally_without_reprompting_fuel(bot, 
     )
     bot.sent.clear()
     bot.text("Mi favorita")
-    bot.assert_sent("text")
+    bot.assert_sent("text", "list")
     assert "requiere Premium" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_FUEL
@@ -582,7 +582,7 @@ def test_language_choice_is_remembered_and_change_language_is_explicit(bot, monk
     bot.button("fav_list", kind="list_reply")
     bot.assert_sent("text", "list")
     bot.assert_last_list(["home_search", "account_plan", "nav_menu"])
-    assert "requiere Premium" in bot.sent[-1][1]["message"]
+    assert "requiere Premium" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
     assert bot.searches == []
 
