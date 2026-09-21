@@ -148,3 +148,30 @@ def test_compare_invalid_or_unlocatable_ids_never_trigger_search_or_routes():
         compare_saved_places(
             (favorite(1),), latitude=38.2, longitude=-85.7, fuel_type="wrong",
         )
+
+
+def test_protobuf_money_string_units_and_incomplete_prices_are_not_faked():
+    good = details(1, regular=3)
+    good["fuelOptions"]["fuelPrices"][0]["price"]["units"] = "3"
+    missing = details(2, regular=4)
+    missing["fuelOptions"]["fuelPrices"][0]["price"] = {
+        "currencyCode": "USD",
+    }
+    zero = details(3, regular=1)
+    zero["fuelOptions"]["fuelPrices"][0]["price"] = {
+        "units": "0", "nanos": 0, "currencyCode": "USD",
+    }
+    foreign = details(4, regular=5)
+    foreign["fuelOptions"]["fuelPrices"][0]["price"]["currencyCode"] = "CAD"
+    lookup = {p["id"]: p for p in (good, missing, zero, foreign)}
+    result = compare_saved_places(
+        tuple(favorite(i) for i in range(1, 5)),
+        latitude=38.2, longitude=-85.7, fuel_type="regular",
+        fetch_details=lambda pid: lookup[pid], routes_enabled=False,
+    )
+    assert [s["selected_fuel"]["price"] for s in result["stations"]] == [
+        3.25, None, None, None,
+    ]
+    assert format_favorite_comparison(result, "en").count(
+        "Price unavailable"
+    ) == 3
