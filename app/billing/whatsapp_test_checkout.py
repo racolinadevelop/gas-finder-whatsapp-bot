@@ -54,7 +54,8 @@ def _is_stripe_test_url(url: object, *, portal: bool = False) -> bool:
             "billing.stripe.com" if portal else "checkout.stripe.com"
         )
         and parsed.path.startswith("/p/" if portal else "/c/")
-        and not parsed.fragment
+        # Real Stripe-hosted Checkout URLs may carry an essential #fragment.
+        # Keep the full returned URL intact so it opens correctly on mobile.
     )
 
 
