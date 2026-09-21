@@ -23,6 +23,11 @@ INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN")
 STRIPE_TEST_MODE_ENABLED = os.getenv(
     "STRIPE_TEST_MODE_ENABLED", "false"
 ).lower() in {"1", "true", "yes"}
+# Opt-in for sending Stripe TEST Checkout links to verified WhatsApp senders.
+# This never permits live Stripe keys or public real-money billing.
+STRIPE_TEST_WHATSAPP_LINKS_ENABLED = os.getenv(
+    "STRIPE_TEST_WHATSAPP_LINKS_ENABLED", "false"
+).lower() in {"1", "true", "yes"}
 STRIPE_TEST_SECRET_KEY = os.getenv("STRIPE_TEST_SECRET_KEY", "")
 STRIPE_TEST_PRICE_ID = os.getenv("STRIPE_TEST_PRICE_ID", "")
 STRIPE_TEST_WEBHOOK_SECRET = os.getenv("STRIPE_TEST_WEBHOOK_SECRET", "")

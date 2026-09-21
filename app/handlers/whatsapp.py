@@ -1,6 +1,10 @@
 import logging
 
 from app.billing.test_store import PostgresTestBillingStore
+from app.billing.whatsapp_test_checkout import (
+    WhatsAppTestCheckoutError,
+    create_sender_checkout, create_sender_portal, links_enabled,
+)
 from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED, GAS_STATION_PROVIDER
 from app.conversation import (
     ConversationSession,
@@ -345,6 +349,8 @@ def handle_plan_status(sender: str) -> None:
         and session.state not in {ConversationState.NEW, ConversationState.WAITING_LANGUAGE}
         else "both"
     )
+    offer_checkout = False
+    offer_portal = False
     try:
         regular_premium = subscription_service.get_subscription(sender).has_premium_access
         test_status = None
@@ -353,6 +359,14 @@ def handle_plan_status(sender: str) -> None:
             test_status = record["status"] if record is not None else None
         message = build_plan_message(
             language, regular_premium=regular_premium, test_status=test_status,
+        )
+        offer_checkout = (
+            links_enabled() and test_billing_store is not None
+            and not regular_premium and test_status in {None, "canceled"}
+        )
+        offer_portal = (
+            links_enabled() and test_billing_store is not None
+            and test_status in {"active", "past_due"}
         )
     except Exception:
         logger.warning("Could not check WhatsApp plan status")
@@ -363,10 +377,102 @@ def handle_plan_status(sender: str) -> None:
         )
     send_text_message(to=sender, message=message)
     if language in {"es", "en"}:
-        send_account_actions(sender, build_plan_navigation_prompt(language))
+        send_account_actions(
+            sender, build_plan_navigation_prompt(
+                language, offer_test_checkout=offer_checkout,
+                offer_test_portal=offer_portal,
+            ),
+        )
     else:
         # An explicit first-time language choice (or change) comes first.
         send_language_prompt(sender, display_name=session.profile_name if session else None)
+
+
+def handle_test_checkout(sender: str) -> None:
+    """Only a signed WhatsApp webhook sender may request their own TEST link."""
+    session = conversation_store.get(sender)
+    language = load_saved_language(sender)
+    if session is not None and session.state == ConversationState.WAITING_LANGUAGE:
+        send_state_prompt(sender, session)
+        return
+    if language not in {"es", "en"}:
+        send_language_prompt(sender)
+        return
+    try:
+        url = create_sender_checkout(
+            sender, store=test_billing_store,
+            subscription_service=subscription_service,
+        )
+    except WhatsAppTestCheckoutError as exc:
+        messages = {
+            "already_premium": (
+                "⭐ Ya tienes Premium activo.", "⭐ You already have active Premium."
+            ),
+            "already_linked": (
+                "Tu suscripción de prueba ya está vinculada. Consulta «Mi plan».",
+                "Your test subscription is already linked. Check My plan.",
+            ),
+            "processing": (
+                "⏳ Estamos comprobando tu pago de prueba. Consulta «Mi plan» "
+                "en unos momentos.",
+                "⏳ We're verifying your test payment. Check My plan shortly.",
+            ),
+            "disabled": (
+                "La inscripción de prueba aún no está disponible.",
+                "Test signup isn't available yet.",
+            ),
+        }
+        option = messages.get(exc.args[0], (
+            "⚠️ No pude abrir Stripe de prueba ahora. Inténtalo más tarde.",
+            "⚠️ Couldn't open Stripe test checkout. Please try again later.",
+        ))
+        send_text_message(to=sender, message=option[0 if language == "es" else 1])
+        handle_plan_status(sender)
+        return
+    text = (
+        "⭐ *Probar Premium — Stripe TEST*\n"
+        "Este enlace es exclusivo para pruebas: no se cobra dinero real. "
+        "No introduzcas una tarjeta bancaria real; usa solamente los datos "
+        "de prueba de Stripe.\n\n"
+        f"Abre tu enlace de prueba:\n{url}\n\n"
+        "Después, vuelve a «Mi plan» en WhatsApp. "
+        "Premium se activa únicamente cuando Stripe confirma el pago de prueba."
+        if language == "es" else
+        "⭐ *Try Premium — Stripe TEST*\n"
+        "This link is for testing only: no real money is charged. "
+        "Do not enter a real bank card; use Stripe test payment details only.\n\n"
+        f"Open your test link:\n{url}\n\n"
+        "Then return to My plan in WhatsApp. "
+        "Premium activates only after Stripe verifies the test payment."
+    )
+    send_text_message(to=sender, message=text)
+
+
+def handle_test_portal(sender: str) -> None:
+    language = load_saved_language(sender)
+    if language not in {"es", "en"}:
+        send_language_prompt(sender)
+        return
+    try:
+        url = create_sender_portal(sender, store=test_billing_store)
+    except WhatsAppTestCheckoutError:
+        send_text_message(
+            to=sender, message=(
+                "No pude abrir la gestión de la prueba ahora. Consulta «Mi plan»."
+                if language == "es" else
+                "Couldn't open test subscription management. Check My plan."
+            ),
+        )
+        return
+    send_text_message(
+        to=sender, message=(
+            "💳 Gestiona tu suscripción de *prueba* en Stripe. "
+            "No se realizan cobros reales:\n" + url
+            if language == "es" else
+            "💳 Manage your Stripe *test* subscription. "
+            "No real charges are made:\n" + url
+        ),
+    )
 
 
 def favorite_language(sender: str) -> str:
@@ -623,6 +729,8 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         show_plan=handle_plan_status,
         show_favorite=handle_favorite_action,
         start_search=handle_start_search,
+        create_test_checkout=handle_test_checkout,
+        manage_test_subscription=handle_test_portal,
     )
 
 

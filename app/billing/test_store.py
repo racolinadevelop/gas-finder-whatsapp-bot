@@ -88,6 +88,23 @@ class PostgresTestBillingStore:
                 if row is None or row[0] != hashed:
                     raise TestBillingStoreError("Checkout session already belongs to another user")
 
+    def find_latest_pending_checkout(self, whatsapp_id: str) -> str | None:
+        """Reuse an existing unpaid test Checkout rather than minting duplicates."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT checkout_session_id
+                    FROM stripe_test_checkouts
+                    WHERE whatsapp_id_hash = %s AND subscription_id IS NULL
+                    ORDER BY created_at DESC, checkout_session_id DESC
+                    LIMIT 1
+                    """,
+                    (user_hash(whatsapp_id),),
+                )
+                row = cur.fetchone()
+        return row[0] if row else None
+
     def find_checkout(self, session_id: str) -> tuple[str, str | None, str | None] | None:
         with self._connect() as conn:
             with conn.cursor() as cur:

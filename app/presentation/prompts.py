@@ -332,19 +332,36 @@ def build_main_menu_prompt(language: str, display_name: str | None = None) -> Li
 
 
 
-def build_plan_navigation_prompt(language: str) -> ListPrompt:
-    """Follow the plan status with the same one-tap choices as other screens."""
+def build_plan_navigation_prompt(
+    language: str, *, offer_test_checkout: bool = False,
+    offer_test_portal: bool = False,
+) -> ListPrompt:
+    """Expose only user-appropriate TEST subscription actions, never real billing."""
     es = language == "es"
+    rows = [
+        {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
+        {"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"},
+    ]
+    if offer_test_checkout:
+        rows.append({
+            "id": "account_test_checkout",
+            "title": "⭐ Probar Premium" if es else "⭐ Try Premium",
+            "description": "Stripe TEST · sin cobros reales" if es else "Stripe TEST · no real charges",
+        })
+    if offer_test_portal:
+        rows.append({
+            "id": "account_test_portal",
+            "title": "💳 Gestionar prueba" if es else "💳 Manage test plan",
+        })
+    rows.extend([
+        {"id": "nav_language", "title": "🌐 Cambiar idioma" if es else "🌐 Change language"},
+        {"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"},
+    ])
     return ListPrompt(
         body_text="¿Qué deseas hacer ahora?" if es else "What would you like to do next?",
         button_text="Opciones" if es else "Options",
         section_title="Mi cuenta" if es else "My account",
-        rows=[
-            {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
-            {"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"},
-            {"id": "nav_language", "title": "🌐 Cambiar idioma" if es else "🌐 Change language"},
-            {"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"},
-        ],
+        rows=rows,
     )
 
 

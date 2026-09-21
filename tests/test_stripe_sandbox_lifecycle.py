@@ -229,6 +229,18 @@ def test_authenticated_checkout_creates_immutable_binding_without_entitlement(sa
     assert USER not in repr(rows)
 
 
+def test_pending_checkout_lookup_is_sender_bound_and_disappears_after_payment(sandbox):
+    client, ledger, gateway, db = sandbox
+    assert ledger.find_latest_pending_checkout(USER) is None
+    begin_checkout(client)
+    assert ledger.find_latest_pending_checkout(USER) == SESSION
+    assert ledger.find_latest_pending_checkout(OTHER) is None
+    gateway.complete_payment()
+    assert send_event(client, "evt_pending_lookup_paid").json()["applied"] is True
+    assert ledger.find_latest_pending_checkout(USER) is None
+    assert ledger.has_premium_access(USER)
+
+
 def test_verified_paid_checkout_grants_only_bound_user_and_survives_restart(sandbox):
     client, ledger, gateway, db = sandbox
     begin_checkout(client)
