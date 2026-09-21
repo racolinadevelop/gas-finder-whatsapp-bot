@@ -39,7 +39,12 @@ from app.presentation import (
     build_state_prompt,
 )
 from app.presentation.delivery import deliver_prompt
-from app.presentation.prompts import build_favorites_result_navigation_prompt
+from app.presentation.prompts import (
+    build_favorites_navigation_prompt,
+    build_favorite_removal_prompt,
+    build_plan_navigation_prompt,
+    build_favorites_result_navigation_prompt,
+)
 from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
@@ -279,6 +284,42 @@ def apply_search_flow_decision(
     )
 
 
+def send_account_actions(sender: str, prompt: Prompt) -> None:
+    """These stand-alone lists include their own navigation in every state."""
+    try:
+        send_list_message(
+            to=sender,
+            body_text=prompt.body_text,
+            button_text=prompt.button_text,
+            section_title=prompt.section_title,
+            rows=prompt.rows,
+        )
+    except WhatsAppServiceError:
+        logger.warning("Could not deliver account actions")
+
+
+def handle_start_search(sender: str) -> None:
+    """A contextual Search button works from plan/favorites as well as home."""
+    current = conversation_store.get(sender)
+    if current is not None and current.state == ConversationState.WAITING_LANGUAGE:
+        send_state_prompt(sender, current)
+        return
+
+    language = load_saved_language(sender)
+    if language is None and current is not None and current.state not in {
+        ConversationState.NEW, ConversationState.WAITING_LANGUAGE,
+    }:
+        language = current.language
+    if language is None:
+        session = conversation_transitions.begin(sender)
+        send_state_prompt(sender, session)
+        return
+
+    conversation_transitions.resume(sender, language)
+    session = conversation_transitions.start_search(sender)
+    send_state_prompt(sender, session)
+
+
 def handle_plan_status(sender: str) -> None:
     """Show this WhatsApp sender's own plan without changing search state."""
     session = conversation_store.get(sender)
@@ -305,7 +346,11 @@ def handle_plan_status(sender: str) -> None:
             else "⚠️ Couldn't check your plan right now. Please try again."
         )
     send_text_message(to=sender, message=message)
-
+    if language in {"es", "en"}:
+        send_account_actions(sender, build_plan_navigation_prompt(language))
+    else:
+        # An explicit first-time language choice (or change) comes first.
+        send_language_prompt(sender, display_name=session.profile_name if session else None)
 
 
 def favorite_language(sender: str) -> str:
@@ -463,6 +508,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         send_expected=send_expected_prompt,
         show_plan=handle_plan_status,
         show_favorite=handle_favorite_action,
+        start_search=handle_start_search,
     )
 
 
