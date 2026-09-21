@@ -403,6 +403,52 @@ def handle_favorite_action(
         if favorites_store is None:
             raise RuntimeError("Favorites storage is unavailable")
 
+        if action in {"compare_menu", "compare_page", "compare_fuel"}:
+            session = conversation_store.get(sender)
+            if session is None or session.state == ConversationState.WAITING_LANGUAGE:
+                send_language_prompt(sender)
+                return
+            favorites = favorites_store.list_favorites(sender)
+            if not favorites:
+                action = "list"
+            elif action == "compare_menu":
+                send_account_actions(
+                    sender, build_favorites_compare_pages_prompt(
+                        language, len(favorites),
+                    ),
+                )
+                return
+            elif action == "compare_page":
+                if (
+                    not isinstance(index, int) or index not in (1, 2)
+                    or (index == 2 and len(favorites) <= 5)
+                ):
+                    send_account_actions(
+                        sender, build_favorites_compare_pages_prompt(
+                            language, len(favorites),
+                        ),
+                    )
+                    return
+                session = conversation_transitions.apply(sender, {
+                    "state": ConversationState.WAITING_FAVORITES_FUEL,
+                    "favorite_page": index,
+                })
+                send_state_prompt(sender, session)
+                return
+            elif action == "compare_fuel":
+                if (
+                    session.state != ConversationState.WAITING_FAVORITES_FUEL
+                    or index not in {"regular", "premium", "diesel"}
+                ):
+                    send_expected_prompt(sender, session)
+                    return
+                session = conversation_transitions.apply(sender, {
+                    "state": ConversationState.WAITING_FAVORITES_LOCATION,
+                    "fuel_type": index,
+                })
+                send_state_prompt(sender, session)
+                return
+
         if action == "remove_menu":
             favorites = favorites_store.list_favorites(sender)
             if favorites:
@@ -417,6 +463,14 @@ def handle_favorite_action(
 
         show_view = False
         if action == "list":
+            session = conversation_store.get(sender)
+            if session is not None and session.state in {
+                ConversationState.WAITING_FAVORITES_FUEL,
+                ConversationState.WAITING_FAVORITES_LOCATION,
+            }:
+                conversation_transitions.apply(
+                    sender, {"state": ConversationState.MAIN_MENU}
+                )
             favorites = favorites_store.list_favorites(sender)
             if not favorites:
                 message = (
