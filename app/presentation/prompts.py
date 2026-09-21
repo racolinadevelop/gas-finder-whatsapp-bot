@@ -349,13 +349,15 @@ def build_plan_navigation_prompt(language: str) -> ListPrompt:
 
 
 def build_favorites_navigation_prompt(
-    language: str, *, has_items: bool, premium: bool = True
+    language: str, *, has_items: bool, premium: bool = True, show_view: bool = False
 ) -> ListPrompt:
     """Small actions view even when a user has no favorites or has Free."""
     es = language == "es"
     rows = [
         {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
     ]
+    if premium and has_items and show_view:
+        rows.append({"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"})
     if premium and has_items:
         rows.append({
             "id": "fav_remove_menu",
