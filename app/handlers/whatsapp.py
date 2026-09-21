@@ -236,6 +236,17 @@ def handle_navigation(sender: str, action: NavigationAction) -> None:
         return
 
     current = conversation_store.get(sender)
+    if current is not None and action == NavigationAction.BACK:
+        if current.state == ConversationState.WAITING_FAVORITES_FUEL:
+            conversation_transitions.apply(sender, {"state": ConversationState.MAIN_MENU})
+            handle_favorite_action(sender, "list", None)
+            return
+        if current.state == ConversationState.WAITING_FAVORITES_LOCATION:
+            session = conversation_transitions.apply(
+                sender, {"state": ConversationState.WAITING_FAVORITES_FUEL}
+            )
+            send_state_prompt(sender, session)
+            return
     if current is not None and current.state == ConversationState.WAITING_LANGUAGE:
         # Back cannot silently undo a first-time language choice.
         send_state_prompt(sender, current)
