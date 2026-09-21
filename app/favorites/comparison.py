@@ -91,11 +91,22 @@ def compare_saved_places(
             and isinstance(lng, (int, float)) and not isinstance(lng, bool)
             and -90 <= lat <= 90 and -180 <= lng <= 180
         )
-        fuel_prices = parse_fuel_prices(
-            ((place or {}).get("fuelOptions") or {}).get("fuelPrices") or []
-        ) if place else {}
+        # Missing/invalid price objects must not turn into a fabricated $0.
+        raw_fuels = ((place or {}).get("fuelOptions") or {}).get("fuelPrices") or []
+        valid_fuels = [
+            item for item in raw_fuels
+            if isinstance(item, dict)
+            and isinstance(item.get("price"), dict)
+            and isinstance(item["price"].get("units"), int)
+            and not isinstance(item["price"]["units"], bool)
+            and isinstance(item["price"].get("nanos", 0), int)
+            and item["price"].get("currencyCode") == "USD"
+        ]
+        fuel_prices = parse_fuel_prices(valid_fuels)
         selected = fuel_prices.get(FUEL_TYPE_MAP[fuel_type]) or {}
         price = selected.get("price")
+        if price is not None and price <= 0:
+            price = None
         # No old saved price is used as a fallback after a failed refresh.
         stations.append({
             "name": favorite.name,
