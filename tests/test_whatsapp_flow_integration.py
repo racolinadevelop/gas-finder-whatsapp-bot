@@ -832,3 +832,187 @@ def test_favorite_removal_pagination_and_revoked_access(bot, monkeypatch):
     bot.assert_sent("text", "list")
     assert "Removed: Station 5" in bot.sent[0][1]["message"]
     assert len(store.list_favorites(SENDER)) == 9
+
+
+def test_premium_favorites_comparison_is_guided_and_only_uses_selected_saved_stations(
+    bot, monkeypatch,
+):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    store = InMemoryFavoriteStore()
+    for i in range(7):
+        store.record_results(SENDER, shown_stations([{
+            "id": f"googlePlace{i}", "name": f"Station {i}",
+            "address": f"{i} Main Street",
+        }]))
+        store.add_from_recent(SENDER, 1)
+    monkeypatch.setattr(handler, "favorites_store", store)
+    paid = SubscriptionService(InMemorySubscriptionStore())
+    paid.activate_premium(SENDER)
+    monkeypatch.setattr(handler, "subscription_service", paid)
+    monkeypatch.setattr(handler, "GAS_STATION_PROVIDER", "google")
+    calls = []
+
+    def fake_comparison(favorites, *, latitude, longitude, fuel_type):
+        calls.append((favorites, latitude, longitude, fuel_type))
+        return {
+            "fuel_type": fuel_type,
+            "stations": [{
+                "name": station.name, "address": station.address,
+                "open_now": None, "details_available": False,
+                "selected_fuel": {
+                    "price": None, "updated_at": None, "currency": None,
+                },
+            } for station in favorites],
+        }
+
+    monkeypatch.setattr(handler, "compare_saved_places", fake_comparison)
+
+    bot.text("hola")
+    bot.button("lang_es")
+    bot.sent.clear()
+    bot.button("fav_list", kind="list_reply")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list([
+        "home_search", "fav_compare", "fav_remove_menu", "nav_menu",
+    ])
+    bot.sent.clear()
+
+    bot.button("fav_compare", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list([
+        "fav_compare_page_1", "fav_compare_page_2", "fav_list", "nav_menu",
+    ])
+    assert calls == [] and bot.searches == []
+    bot.sent.clear()
+
+    bot.button("fav_compare_page_2", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list([
+        "fav_fuel_regular", "fav_fuel_premium", "fav_fuel_diesel",
+        "nav_back", "nav_menu",
+    ])
+    session = handler.conversation_store.get(SENDER)
+    assert session.state == ConversationState.WAITING_FAVORITES_FUEL
+    assert session.favorite_page == 2
+    bot.sent.clear()
+
+    bot.location()
+    assert calls == [] and bot.searches == []
+    bot.assert_sent("list")  # Must select fuel before location is valid.
+    bot.sent.clear()
+
+    bot.button("fav_fuel_diesel", kind="list_reply")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_FAVORITES_LOCATION
+    )
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["nav_back", "nav_menu"])
+    bot.sent.clear()
+
+    bot.location()
+    bot.assert_sent("text", "list")
+    assert len(calls) == 1
+    compared, lat, lng, fuel = calls[0]
+    assert [s.name for s in compared] == ["Station 5", "Station 6"]
+    assert (lat, lng, fuel) == (38.25, -85.75, "diesel")
+    assert "Station 5" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+    bot.assert_last_list(["fav_compare", "fav_list", "home_search", "nav_menu"])
+    assert bot.searches == []
+    bot.sent.clear()
+
+    bot.button("home_search", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list([
+        "fuel_regular", "fuel_premium", "fuel_diesel", "nav_back", "nav_menu",
+    ])
+    assert handler.conversation_store.get(SENDER).state == ConversationState.WAITING_FUEL
+
+
+def test_cancelled_premium_blocks_comparison_even_after_location_prompt(bot, monkeypatch):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    class Ledger:
+        active = True
+        def has_premium_access(self, sender):
+            assert sender == SENDER
+            return self.active
+
+    ledger = Ledger()
+    store = InMemoryFavoriteStore()
+    store.record_results(SENDER, shown_stations([{
+        "id": "googlePlace1", "name": "Saved Station", "address": "Main St",
+    }]))
+    store.add_from_recent(SENDER, 1)
+    monkeypatch.setattr(handler, "favorites_store", store)
+    monkeypatch.setattr(
+        handler, "subscription_service",
+        SubscriptionService(InMemorySubscriptionStore(), test_entitlements=ledger),
+    )
+    monkeypatch.setattr(handler, "GAS_STATION_PROVIDER", "google")
+    calls = []
+    monkeypatch.setattr(
+        handler, "compare_saved_places",
+        lambda *args, **kwargs: calls.append(args) or {"stations": []},
+    )
+
+    bot.text("hola")
+    bot.button("lang_es")
+    bot.button("fav_compare", kind="list_reply")
+    bot.button("fav_compare_page_1", kind="list_reply")
+    bot.button("fav_fuel_regular", kind="list_reply")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_FAVORITES_LOCATION
+    )
+    ledger.active = False
+    bot.sent.clear()
+    bot.location()
+    bot.assert_sent("text", "list")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    assert calls == [] and bot.searches == []
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+
+
+def test_compare_favorites_rate_limit_and_back_keep_normal_search_free(bot, monkeypatch):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    store = InMemoryFavoriteStore()
+    store.record_results(SENDER, shown_stations([{
+        "id": "googlePlace1", "name": "Saved Station", "address": "Main St",
+    }]))
+    store.add_from_recent(SENDER, 1)
+    monkeypatch.setattr(handler, "favorites_store", store)
+    paid = SubscriptionService(InMemorySubscriptionStore())
+    paid.activate_premium(SENDER)
+    monkeypatch.setattr(handler, "subscription_service", paid)
+    monkeypatch.setattr(handler, "GAS_STATION_PROVIDER", "google")
+    monkeypatch.setattr(handler.search_rate_limiter, "allow", lambda _sender: False)
+    monkeypatch.setattr(
+        handler, "compare_saved_places",
+        lambda *a, **kw: pytest.fail("rate-limited comparison must not fetch"),
+    )
+
+    bot.text("hola")
+    bot.button("lang_en")
+    bot.button("fav_compare", kind="list_reply")
+    bot.button("fav_compare_page_1", kind="list_reply")
+    bot.sent.clear()
+    bot.button("nav_back", kind="list_reply")
+    bot.assert_sent("text", "list")  # Back from fuel returns to saved favorites.
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+    bot.sent.clear()
+
+    bot.button("fav_compare", kind="list_reply")
+    bot.button("fav_compare_page_1", kind="list_reply")
+    bot.button("fav_fuel_premium", kind="list_reply")
+    bot.sent.clear()
+    bot.location()
+    assert "Wait a few minutes" in bot.sent[0][1]["message"]
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_FAVORITES_LOCATION
+    )
+    assert bot.searches == []
