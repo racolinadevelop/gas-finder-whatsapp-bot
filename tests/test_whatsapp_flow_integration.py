@@ -1013,3 +1013,125 @@ def test_compare_favorites_rate_limit_and_back_keep_normal_search_free(bot, monk
         ConversationState.WAITING_FAVORITES_LOCATION
     )
     assert bot.searches == []
+
+
+def test_whatsapp_test_checkout_and_portal_buttons_are_user_bound_and_keep_search_state(
+    bot, monkeypatch,
+):
+    from types import SimpleNamespace
+
+    class Ledger:
+        record = None
+        def get_test_subscription(self, sender):
+            assert sender == SENDER
+            return self.record
+
+    ledger = Ledger()
+    monkeypatch.setattr(handler, "test_billing_store", ledger)
+    monkeypatch.setattr(handler, "links_enabled", lambda: True)
+    monkeypatch.setattr(
+        handler.subscription_service, "get_subscription",
+        lambda sender: SimpleNamespace(has_premium_access=False),
+    )
+    requested, managed = [], []
+    test_url = "https://checkout.stripe.com/c/pay/cs_test_user_link"
+    portal_url = "https://billing.stripe.com/p/session/test"
+    monkeypatch.setattr(
+        handler, "create_sender_checkout",
+        lambda sender, *, store, subscription_service: (
+            requested.append((sender, store, subscription_service)) or test_url
+        ),
+    )
+    monkeypatch.setattr(
+        handler, "create_sender_portal",
+        lambda sender, *, store: managed.append((sender, store)) or portal_url,
+    )
+
+    bot.text("hola")
+    bot.button("lang_es")
+    bot.button("home_search", kind="list_reply")
+    original = handler.conversation_store.get(SENDER)
+    assert original.state == ConversationState.WAITING_FUEL
+    bot.sent.clear()
+
+    bot.button("account_plan", kind="list_reply")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list([
+        "home_search", "fav_list", "account_test_checkout",
+        "nav_language", "nav_menu",
+    ])
+    assert handler.conversation_store.get(SENDER) == original
+    bot.sent.clear()
+
+    bot.button("account_test_checkout", kind="list_reply")
+    bot.assert_sent("text")
+    assert test_url in bot.sent[0][1]["message"]
+    assert "Stripe TEST" in bot.sent[0][1]["message"]
+    assert "no se cobra dinero real" in bot.sent[0][1]["message"]
+    assert requested == [(SENDER, ledger, handler.subscription_service)]
+    assert handler.conversation_store.get(SENDER) == original
+    assert bot.searches == []
+    bot.sent.clear()
+
+    # Only the verified billing webhook changes the entitlement ledger.
+    # The test mode active status must show Manage, never buy a second plan.
+    ledger.record = {
+        "status": "active", "customer_id": "cus_sandbox",
+        "subscription_id": "sub_sandbox",
+    }
+    bot.button("account_plan", kind="list_reply")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list([
+        "home_search", "fav_list", "account_test_portal",
+        "nav_language", "nav_menu",
+    ])
+    bot.sent.clear()
+    bot.button("account_test_portal", kind="list_reply")
+    bot.assert_sent("text")
+    assert portal_url in bot.sent[0][1]["message"]
+    assert managed == [(SENDER, ledger)]
+    assert handler.conversation_store.get(SENDER) == original
+    bot.sent.clear()
+
+    ledger.record["status"] = "canceled"
+    bot.button("account_plan", kind="list_reply")
+    bot.assert_last_list([
+        "home_search", "fav_list", "account_test_checkout",
+        "nav_language", "nav_menu",
+    ])
+
+
+def test_whatsapp_billing_links_are_not_offered_when_disabled_or_before_language(
+    bot, monkeypatch,
+):
+    from types import SimpleNamespace
+
+    class Ledger:
+        def get_test_subscription(self, sender):
+            return None
+
+    monkeypatch.setattr(handler, "test_billing_store", Ledger())
+    monkeypatch.setattr(
+        handler.subscription_service, "get_subscription",
+        lambda sender: SimpleNamespace(has_premium_access=False),
+    )
+    monkeypatch.setattr(handler, "links_enabled", lambda: False)
+    bot.text("hola")
+    bot.sent.clear()
+    bot.button("account_plan", kind="button_reply")
+    bot.assert_sent("text", "buttons")
+    bot.assert_last_buttons(["lang_en", "lang_es", "account_plan"])
+    bot.sent.clear()
+    bot.button("account_test_checkout", kind="list_reply")
+    bot.assert_sent("buttons")
+    assert handler.conversation_store.get(SENDER).state == (
+        ConversationState.WAITING_LANGUAGE
+    )
+    bot.sent.clear()
+    bot.button("lang_en")
+    bot.button("account_plan", kind="list_reply")
+    bot.assert_last_list(["home_search", "fav_list", "nav_language", "nav_menu"])
+    bot.sent.clear()
+    bot.button("account_test_checkout", kind="list_reply")
+    assert "isn't available yet" in bot.sent[0][1]["message"]
+    assert "checkout.stripe.com" not in repr(bot.sent)
