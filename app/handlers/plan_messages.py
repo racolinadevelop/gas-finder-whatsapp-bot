@@ -57,7 +57,7 @@ def build_plan_message(
             f"{headline}{note}\n"
             "La búsqueda básica de gasolineras es gratis. "
             "Guardar y consultar favoritas requiere Premium.\n"
-            "Escribe «mis favoritas» o «menú» para continuar."
+            "Selecciona una opción para continuar."
         )
 
     headline = (
@@ -77,5 +77,5 @@ def build_plan_message(
         f"{headline}{note}\n"
         "Basic gas-station search is free. "
         "Saving and viewing favorites requires Premium.\n"
-        "Type “my favorites” or “menu” to continue."
+        "Choose an option to continue."
     )
