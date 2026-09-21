@@ -422,7 +422,7 @@ def test_favorites_require_current_premium_and_preserve_free_search(bot, monkeyp
     bot.sent.clear()
     bot.button("fav_save_1", kind="list_reply")
     bot.assert_sent("text", "list")
-    bot.assert_last_list(["home_search", "fav_list", "fav_remove_menu", "nav_menu"])
+    bot.assert_last_list(["home_search", "fav_compare", "fav_list", "fav_remove_menu", "nav_menu"])
     assert "Guardada" in bot.sent[0][1]["message"]
     assert "Example Station" in bot.sent[0][1]["message"]
     assert handler.conversation_store.get(SENDER) == original
@@ -735,14 +735,14 @@ def test_favorites_empty_saved_and_remove_menu_use_one_tap_choices(bot, monkeypa
     bot.sent.clear()
     bot.button("fav_save_1", kind="list_reply")
     bot.assert_sent("text", "list")
-    bot.assert_last_list(["home_search", "fav_list", "fav_remove_menu", "nav_menu"])
+    bot.assert_last_list(["home_search", "fav_compare", "fav_list", "fav_remove_menu", "nav_menu"])
     assert len(bot.searches) == 0
 
     bot.sent.clear()
     bot.button("fav_list", kind="list_reply")
     bot.assert_sent("text", "list")
     assert "Station Example" in bot.sent[0][1]["message"]
-    bot.assert_last_list(["home_search", "fav_remove_menu", "nav_menu"])
+    bot.assert_last_list(["home_search", "fav_compare", "fav_remove_menu", "nav_menu"])
 
     bot.sent.clear()
     bot.button("fav_remove_menu", kind="list_reply")
