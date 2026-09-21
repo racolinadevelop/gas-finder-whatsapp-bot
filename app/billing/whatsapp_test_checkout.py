@@ -75,7 +75,7 @@ def create_sender_checkout(
         # Uses a hashed sender, never stores raw phone numbers in Redis.
         with client.lock(
             f"{REDIS_KEY_PREFIX}:test-checkout:{sha256(sender.encode()).hexdigest()}",
-            timeout=30, blocking_timeout=1,
+            timeout=75, blocking_timeout=1,
         ):
             gateway = gateway or test_gateway()
             if subscription_service.get_subscription(sender).has_premium_access:
