@@ -206,3 +206,38 @@ returns to the remembered-language home screen. Search from any account view
 starts the existing fuel-selection flow. None of these views requests new
 Google Places or Routes data, changes the stored language, or enables live
 Stripe billing.
+
+
+## Compare Premium favorites on demand
+
+The **Compare favorites / Comparar favoritas** option is available from the
+saved-favorites WhatsApp list with active Premium (including Stripe **TEST**
+entitlements). The user selects the first five or, when present, favorites
+6–10, chooses Regular/Premium/Diesel, then explicitly shares a WhatsApp location.
+The feature **never** auto-refreshes or monitors prices. The comparison rechecks
+the sender's Premium entitlement and the existing per-user search rate limit
+immediately before making billable provider requests. Canceling Premium while
+waiting for location blocks all comparison API calls.
+
+For a comparison of N selected saved Google stations (1 <= N <= 5), the
+service requests **at most N Google Place Details (New) responses**, by saved
+place ID with a narrow field mask. It does **not** call Places Text Search,
+search across a new radius, or re-fetch other favorites. If the separately
+configured Routes API is on, it may also call **one Routes matrix** for at
+most N currently operational stations with valid coordinates; its matrix
+elements are separately billable. In particular, fetching `fuelOptions` in
+Place Details uses Google's higher-priced Place Details Enterprise + Atmosphere
+SKU: unlike merely opening the saved list, **comparing favorites is not free
+of Google API usage**. Keep this manual, bounded comparison and check actual
+Google Cloud billing before enabling it broadly.
+
+The response sorts available USD fuel prices first, reports Google's price
+update time (or explicitly says that it is unknown), and shows real driving
+miles/ETA only when Routes returns an actual route. Unavailable prices, closed
+stations, unsupported older favorite IDs and missing routes are labeled; an
+old saved price, geographic straight-line distance or made-up route is never
+shown as current data. Only station identity, name and address remain saved:
+the location, fetched prices and computed routes are not persisted. The
+normal **free** gas-station search remains unchanged. Under the alternative
+HERE provider this Google-place-ID comparison is unavailable; it does not
+silently send HERE station IDs to Google.

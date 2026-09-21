@@ -356,6 +356,11 @@ def build_favorites_navigation_prompt(
     rows = [
         {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
     ]
+    if premium and has_items:
+        rows.append({
+            "id": "fav_compare",
+            "title": "📊 Comparar favoritas" if es else "📊 Compare favorites",
+        })
     if premium and has_items and show_view:
         rows.append({"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"})
     if premium and has_items:
@@ -411,6 +416,75 @@ def build_favorite_removal_prompt(
     )
 
 
+
+def build_favorites_compare_pages_prompt(language: str, count: int) -> ListPrompt:
+    es = language == "es"
+    rows = [
+        {"id": "fav_compare_page_1", "title": "📊 Comparar 1–5" if es else "📊 Compare 1–5"},
+    ]
+    if count > 5:
+        rows.append({
+            "id": "fav_compare_page_2",
+            "title": "📊 Comparar 6–10" if es else "📊 Compare 6–10",
+        })
+    rows.extend([
+        {"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"},
+        {"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"},
+    ])
+    return ListPrompt(
+        body_text=(
+            "Elige qué favoritas quieres comparar (máximo 5 por consulta)."
+            if es else "Choose your favorites to compare (up to 5 per request)."
+        ),
+        button_text="Comparar" if es else "Compare",
+        section_title="Comparación" if es else "Comparison",
+        rows=rows,
+    )
+
+
+def build_favorites_compare_fuel_prompt(language: str) -> ListPrompt:
+    es = language == "es"
+    return ListPrompt(
+        body_text=(
+            "⛽ ¿Qué combustible quieres comparar en tus favoritas?"
+            if es else "⛽ Which fuel would you like to compare at your favorites?"
+        ),
+        button_text="Combustible" if es else "Fuel",
+        section_title="Combustible" if es else "Fuel type",
+        rows=[
+            {"id": "fav_fuel_regular", "title": "⛽ Regular"},
+            {"id": "fav_fuel_premium", "title": "✨ Premium"},
+            {"id": "fav_fuel_diesel", "title": "🚛 Diésel" if es else "🚛 Diesel"},
+        ],
+    )
+
+
+def build_favorites_compare_location_prompt(language: str) -> TextPrompt:
+    return TextPrompt(message=(
+        "📍 Compararemos solo tus favoritas guardadas. "
+        "Comparte tu ubicación desde WhatsApp para calcular la ruta por carretera "
+        "si está disponible. No guardamos tu ubicación."
+        if language == "es" else
+        "📍 We'll compare only your saved favorites. Share your WhatsApp location "
+        "to calculate a driving route when available. We don't store your location."
+    ))
+
+
+def build_favorites_compare_results_prompt(language: str, count: int) -> ListPrompt:
+    es = language == "es"
+    return ListPrompt(
+        body_text="¿Qué deseas hacer ahora?" if es else "What would you like to do next?",
+        button_text="Opciones" if es else "Options",
+        section_title="Comparar favoritas" if es else "Compare favorites",
+        rows=[
+            {"id": "fav_compare", "title": "📊 Comparar otra vez" if es else "📊 Compare again"},
+            {"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"},
+            {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
+            {"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"},
+        ],
+    )
+
+
 def build_state_prompt(
     session: ConversationSession,
     error: bool = False,
@@ -426,6 +500,10 @@ def build_state_prompt(
         )
     if session.state == ConversationState.MAIN_MENU:
         return build_main_menu_prompt(session.language, session.profile_name)
+    if session.state == ConversationState.WAITING_FAVORITES_FUEL:
+        return build_favorites_compare_fuel_prompt(session.language)
+    if session.state == ConversationState.WAITING_FAVORITES_LOCATION:
+        return build_favorites_compare_location_prompt(session.language)
     if session.state == ConversationState.WAITING_FUEL:
         return build_fuel_prompt(session.language, error=error)
     if session.state == ConversationState.WAITING_SORT:

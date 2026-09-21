@@ -12,6 +12,8 @@ class ConversationState(StrEnum):
     WAITING_CUSTOM_DISTANCE = "waiting_custom_distance"
     WAITING_LOCATION = "waiting_location"
     WAITING_RESULTS = "waiting_results"
+    WAITING_FAVORITES_FUEL = "waiting_favorites_fuel"
+    WAITING_FAVORITES_LOCATION = "waiting_favorites_location"
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,3 +25,4 @@ class ConversationSession:
     sort: str = "best"
     max_distance_miles: float | None = None
     profile_name: str | None = None
+    favorite_page: int = 1

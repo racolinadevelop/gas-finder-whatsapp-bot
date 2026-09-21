@@ -1,7 +1,7 @@
 import logging
 
 from app.billing.test_store import PostgresTestBillingStore
-from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED
+from app.config import DATABASE_URL, STRIPE_TEST_MODE_ENABLED, GAS_STATION_PROVIDER
 from app.conversation import (
     ConversationSession,
     ConversationState,
@@ -16,6 +16,7 @@ from app.favorites import (
     PostgresFavoriteStore,
 )
 from app.favorites.models import FavoriteStation
+from app.favorites.comparison import compare_saved_places, format_favorite_comparison
 from app.handlers.conversation_states import ConversationStateHandlers
 from app.handlers.interactive_messages import process_interactive_message
 from app.handlers.location_messages import process_location_message
@@ -44,6 +45,10 @@ from app.presentation.prompts import (
     build_favorite_removal_prompt,
     build_plan_navigation_prompt,
     build_favorites_result_navigation_prompt,
+    build_favorites_compare_pages_prompt,
+    build_favorites_compare_fuel_prompt,
+    build_favorites_compare_location_prompt,
+    build_favorites_compare_results_prompt,
 )
 from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
@@ -231,6 +236,17 @@ def handle_navigation(sender: str, action: NavigationAction) -> None:
         return
 
     current = conversation_store.get(sender)
+    if current is not None and action == NavigationAction.BACK:
+        if current.state == ConversationState.WAITING_FAVORITES_FUEL:
+            conversation_transitions.apply(sender, {"state": ConversationState.MAIN_MENU})
+            handle_favorite_action(sender, "list", None)
+            return
+        if current.state == ConversationState.WAITING_FAVORITES_LOCATION:
+            session = conversation_transitions.apply(
+                sender, {"state": ConversationState.WAITING_FAVORITES_FUEL}
+            )
+            send_state_prompt(sender, session)
+            return
     if current is not None and current.state == ConversationState.WAITING_LANGUAGE:
         # Back cannot silently undo a first-time language choice.
         send_state_prompt(sender, current)
@@ -387,6 +403,59 @@ def handle_favorite_action(
         if favorites_store is None:
             raise RuntimeError("Favorites storage is unavailable")
 
+        if action in {"compare_menu", "compare_page", "compare_fuel"}:
+            session = conversation_store.get(sender)
+            if session is None or session.state == ConversationState.WAITING_LANGUAGE:
+                send_language_prompt(sender)
+                return
+            favorites = favorites_store.list_favorites(sender)
+            if not favorites:
+                action = "list"
+            elif action == "compare_menu":
+                if len(favorites) <= 5:
+                    session = conversation_transitions.apply(sender, {
+                        "state": ConversationState.WAITING_FAVORITES_FUEL,
+                        "favorite_page": 1,
+                    })
+                    send_state_prompt(sender, session)
+                else:
+                    send_account_actions(
+                        sender, build_favorites_compare_pages_prompt(
+                            language, len(favorites),
+                        ),
+                    )
+                return
+            elif action == "compare_page":
+                if (
+                    not isinstance(index, int) or index not in (1, 2)
+                    or (index == 2 and len(favorites) <= 5)
+                ):
+                    send_account_actions(
+                        sender, build_favorites_compare_pages_prompt(
+                            language, len(favorites),
+                        ),
+                    )
+                    return
+                session = conversation_transitions.apply(sender, {
+                    "state": ConversationState.WAITING_FAVORITES_FUEL,
+                    "favorite_page": index,
+                })
+                send_state_prompt(sender, session)
+                return
+            elif action == "compare_fuel":
+                if (
+                    session.state != ConversationState.WAITING_FAVORITES_FUEL
+                    or index not in {"regular", "premium", "diesel"}
+                ):
+                    send_expected_prompt(sender, session)
+                    return
+                session = conversation_transitions.apply(sender, {
+                    "state": ConversationState.WAITING_FAVORITES_LOCATION,
+                    "fuel_type": index,
+                })
+                send_state_prompt(sender, session)
+                return
+
         if action == "remove_menu":
             favorites = favorites_store.list_favorites(sender)
             if favorites:
@@ -401,6 +470,14 @@ def handle_favorite_action(
 
         show_view = False
         if action == "list":
+            session = conversation_store.get(sender)
+            if session is not None and session.state in {
+                ConversationState.WAITING_FAVORITES_FUEL,
+                ConversationState.WAITING_FAVORITES_LOCATION,
+            }:
+                conversation_transitions.apply(
+                    sender, {"state": ConversationState.MAIN_MENU}
+                )
             favorites = favorites_store.list_favorites(sender)
             if not favorites:
                 message = (
@@ -595,7 +672,119 @@ def search_from_location(
     )
 
 
+def compare_favorites_from_location(
+    incoming_message: IncomingMessage, session: ConversationSession
+) -> None:
+    """Refresh the chosen favorites only after explicit location and entitlement checks."""
+    sender = incoming_message.sender
+    es = session.language == "es"
+    if incoming_message.latitude is None or incoming_message.longitude is None:
+        return
+    if not subscription_service.can_use_feature(sender, Feature.FAVORITES):
+        send_text_message(
+            to=sender,
+            message=(
+                "⭐ Comparar favoritas requiere Premium activo."
+                if es else "⭐ Comparing favorites requires active Premium."
+            ),
+        )
+        conversation_transitions.apply(sender, {"state": ConversationState.MAIN_MENU})
+        send_account_actions(
+            sender, build_favorites_navigation_prompt(
+                session.language, has_items=False, premium=False,
+            ),
+        )
+        return
+    if favorites_store is None:
+        send_text_message(
+            to=sender,
+            message="⚠️ Favoritas no disponibles ahora." if es
+            else "⚠️ Favorites aren't available right now.",
+        )
+        return
+    if GAS_STATION_PROVIDER != "google":
+        send_text_message(
+            to=sender,
+            message=(
+                "⚠️ Esta comparación necesita favoritas de Google Places; "
+                "el proveedor actual no permite consultar sus precios por estación."
+                if es else
+                "⚠️ This comparison needs Google Places favorites; "
+                "the current provider cannot retrieve prices for saved station IDs."
+            ),
+        )
+        return
+    favorites = favorites_store.list_favorites(sender)
+    selected = favorites[(session.favorite_page - 1) * 5:session.favorite_page * 5]
+    if not selected:
+        send_text_message(
+            to=sender,
+            message="⭐ No hay favoritas en ese grupo." if es
+            else "⭐ No favorites in that group.",
+        )
+        conversation_transitions.apply(sender, {"state": ConversationState.MAIN_MENU})
+        send_account_actions(
+            sender, build_favorites_compare_pages_prompt(
+                session.language, len(favorites),
+            ),
+        ) if favorites else send_account_actions(
+            sender, build_favorites_navigation_prompt(
+                session.language, has_items=False,
+            ),
+        )
+        return
+    if not search_rate_limiter.allow(sender):
+        send_text_message(
+            to=sender,
+            message=(
+                "⏳ Has realizado varias consultas. Espera unos minutos para "
+                "comparar de nuevo tus favoritas."
+                if es else
+                "⏳ You've made several requests. Wait a few minutes "
+                "before comparing your favorites again."
+            ),
+        )
+        return
+    try:
+        result = compare_saved_places(
+            selected,
+            latitude=incoming_message.latitude,
+            longitude=incoming_message.longitude,
+            fuel_type=session.fuel_type,
+        )
+    except Exception:
+        logger.warning("Unable to refresh favorite comparison")
+        send_text_message(
+            to=sender,
+            message=(
+                "⚠️ No pude actualizar tus favoritas ahora. "
+                "Inténtalo de nuevo más tarde."
+                if es else
+                "⚠️ Couldn't refresh your favorites right now. "
+                "Please try again later."
+            ),
+        )
+        return
+
+    send_text_message(
+        to=sender,
+        message=format_favorite_comparison(result, session.language),
+    )
+    # Do not persist the location or any fetched price/route; leave the user's
+    # independent gas-search preferences and saved favorites unchanged.
+    conversation_transitions.apply(sender, {"state": ConversationState.MAIN_MENU})
+    send_account_actions(
+        sender, build_favorites_compare_results_prompt(
+            session.language, len(selected),
+        ),
+    )
+
+
 def handle_location_message(incoming_message: IncomingMessage) -> None:
+    session = conversation_store.get(incoming_message.sender)
+    if session is not None and session.state == ConversationState.WAITING_FAVORITES_LOCATION:
+        compare_favorites_from_location(incoming_message, session)
+        return
     process_location_message(
         incoming_message,
         get_session=conversation_store.get,

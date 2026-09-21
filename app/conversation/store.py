@@ -114,6 +114,7 @@ class RedisConversationStore:
             sort=data["sort"],
             max_distance_miles=data["max_distance_miles"],
             profile_name=data.get("profile_name"),
+            favorite_page=data.get("favorite_page", 1),
         )
 
     def _write(self, session: ConversationSession) -> None:
