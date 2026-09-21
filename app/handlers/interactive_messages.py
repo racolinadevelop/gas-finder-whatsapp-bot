@@ -25,6 +25,8 @@ def process_interactive_message(
     show_plan: Callable[[str], None] | None = None,
     show_favorite: Callable[[str, str, int | str | None], None] | None = None,
     start_search: Callable[[str], None] | None = None,
+    create_test_checkout: Callable[[str], None] | None = None,
+    manage_test_subscription: Callable[[str], None] | None = None,
 ) -> None:
     """Prioritize global navigation and reject stale language buttons."""
     sender = incoming_message.sender
@@ -41,6 +43,14 @@ def process_interactive_message(
 
     if button_id == PLAN_SELECTION_ID and show_plan is not None:
         show_plan(sender)
+        return
+
+    if button_id == "account_test_checkout" and create_test_checkout is not None:
+        create_test_checkout(sender)
+        return
+
+    if button_id == "account_test_portal" and manage_test_subscription is not None:
+        manage_test_subscription(sender)
         return
 
     favorite_action = parse_favorite_action(selection_id=button_id)
