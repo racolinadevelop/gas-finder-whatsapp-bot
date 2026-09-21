@@ -173,3 +173,27 @@ def test_production_kill_switch_blocks_routes_even_when_budget_allows(monkeypatc
     assert road_routes.add_road_routes(
         original, latitude=38.25, longitude=-85.75, api_key="fake"
     ) is original
+
+
+def test_invalid_route_destinations_are_excluded_before_reservation(monkeypatch):
+    outbound = []
+    monkeypatch.setattr(road_routes, "APP_ENV", "production")
+    monkeypatch.setattr(road_routes, "ROUTES_API_ENABLED", True)
+    monkeypatch.setattr(
+        road_routes, "reserve_production_route_elements",
+        lambda count: outbound.append(("reserve", count)) or True,
+    )
+    monkeypatch.setattr(
+        road_routes.httpx, "post",
+        lambda *a, **k: outbound.append(("post", len(k["json"]["destinations"])))
+        or FakeResponse([]),
+    )
+    data = places(5)
+    data["stations"][0]["latitude"] = float("nan")
+    data["stations"][1]["longitude"] = None
+    data["stations"][2]["latitude"] = 91
+    data["stations"][3]["latitude"] = True
+    road_routes.add_road_routes(
+        data, latitude=38.25, longitude=-85.75, api_key="fake",
+    )
+    assert outbound == [("reserve", 1), ("post", 1)]
