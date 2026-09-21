@@ -205,6 +205,17 @@ def test_only_stripe_https_checkout_links_are_accepted(flow, bad_url):
     assert store.checkout_id is None
 
 
+def test_real_stripe_hosted_checkout_url_fragment_is_preserved(flow):
+    store, gateway, redis, plan = flow
+    real_url = TEST_URL + "#fidkdWxOYHwnPyd1blppbHNgWjA0bHx"
+    gateway.create_checkout = lambda _: {
+        "session_id": "cs_test_example", "url": real_url,
+    }
+    assert issue(flow) == real_url
+    gateway.checkout_url = real_url
+    assert issue(flow) == real_url
+
+
 def test_redis_failure_and_disabled_flag_fail_closed_without_stripe_call(flow, monkeypatch):
     store, gateway, redis, plan = flow
     redis.unavailable = True
