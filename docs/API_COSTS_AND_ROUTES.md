@@ -78,9 +78,7 @@ To activate after reviewing your Google Cloud budget:
    The original search still works, showing an explicitly approximate
    geographic distance.
 
-**This code cannot activate Routes API or change your Railway variables
-without access to those accounts.** A green automated test does not prove
-Routes is enabled or paid traffic can successfully use the live API.
+**Automated tests do not verify Google Cloud billing or live API quotas.**
 
 If a Google Cloud project imposes an API quota, reaching the quota may cause
 route enrichment to fail gracefully. Set separate Cloud Billing budgets and
@@ -94,3 +92,46 @@ Official references:
 - [Routes matrix elements and REST requests](https://developers.google.com/maps/documentation/routes/compute_route_matrix)
 - [Google Maps Platform pricing](https://developers.google.com/maps/billing-and-pricing/pricing)
 - [Service-specific Maps Content storage terms](https://cloud.google.com/maps-platform/terms/maps-service-terms)
+
+
+## Production spending guard: route-matrix elements (2026-09-21)
+
+Both the regular five-result search and the on-demand Premium favorite comparison
+use `app.services.road_routes.add_road_routes`; therefore both share the **same
+atomic Redis budget**. Route matrices bill by **elements, not by HTTP requests**:
+one origin × five destinations reserves five elements. Production reserves all
+eligible destinations *before* sending a request, counting even failed and
+timed-out attempts conservatively. A Redis Lua transaction enforces:
+
+- `ROUTES_DAILY_ELEMENT_LIMIT=25` (default initial test ceiling, UTC days).
+- `ROUTES_MONTHLY_ELEMENT_LIMIT=150` (default initial test ceiling, UTC months).
+- `ROUTES_MAX_DESTINATIONS=5` (maximum elements per single request).
+
+These caps apply **in aggregate across all WhatsApp users and both search
+flows**, not separately per user or per Railway worker. The key prefix is stable
+across deploys and Redis counters expire at the next UTC day/month boundary.
+At the cap, or if Redis is unavailable, the server skips the Routes HTTP call
+and reports that driving distance is unavailable; station search still works.
+The allowance is *not* a USD spending ceiling and does not count Maps/Routes
+calls from other services, other API keys, or Google-side retries. It also does
+not govern Places Text Search or the paid Place Details requests used by
+`Comparar favoritas`. Set Google Cloud API quotas in addition to this limit.
+
+**Routes has been turned off in Railway while these guardrails are verified.**
+Before turning `ROUTES_API_ENABLED=true` again, verify the right Google Cloud
+project/key, inspect existing Google Cloud Billing charges, configure a
+service-specific **Routes API / Compute Route Matrix quota** in Maps Platform
+→ Quotas, and configure a Cloud Billing budget with alert emails. Important:
+**budget alerts are not hard spending caps**. Google Cloud quotas apply to the
+whole project/service and can offer an independent brake, but Google may
+present a per-minute matrix element quota rather than an editable daily
+product quota; in that case restrict the supported quota and use this app's
+daily/monthly Redis limits. The app alone cannot guarantee a fixed bill.
+
+The numeric 25/day and 150/month values are **conservative testing defaults**,
+not an assumption about a personal spending budget or a recommendation for a
+future public service. Change them after comparing current usage, current
+Google Maps SKU/pricing, actual Cloud Billing reports and available quota
+controls. Reducing these values takes effect immediately against already
+reserved elements. Do not reset or rename the Redis budget keys to sidestep
+a quota. Confirm deployment and API quota settings before re-enabling Routes.

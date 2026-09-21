@@ -10,7 +10,8 @@ import math
 
 import httpx
 
-from app.config import GOOGLE_MAPS_API_KEY, ROUTES_MAX_DESTINATIONS
+from app.config import APP_ENV, GOOGLE_MAPS_API_KEY, ROUTES_API_ENABLED, ROUTES_MAX_DESTINATIONS
+from app.services.route_budget import reserve_production_route_elements
 from app.utils.cost import calculate_estimated_cost
 
 logger = logging.getLogger(__name__)
@@ -43,16 +44,32 @@ def add_road_routes(
     geographical fallback distance as actual driving distance.
     """
     stations = result.get("stations", [])
+    # The production kill switch applies at the shared HTTP boundary too,
+    # not only to the two current callers that normally check this flag.
+    if APP_ENV == "production" and not ROUTES_API_ENABLED:
+        return result
     if not stations or not api_key:
         return result
 
     eligible = [
         (index, station)
         for index, station in enumerate(stations)
-        if station.get("latitude") is not None
-        and station.get("longitude") is not None
-    ][:max_destinations]
+        if isinstance(station.get("latitude"), (int, float))
+        and not isinstance(station["latitude"], bool)
+        and math.isfinite(station["latitude"])
+        and -90 <= station["latitude"] <= 90
+        and isinstance(station.get("longitude"), (int, float))
+        and not isinstance(station["longitude"], bool)
+        and math.isfinite(station["longitude"])
+        and -180 <= station["longitude"] <= 180
+    ][:min(max_destinations, 5)]
     if not eligible:
+        return result
+
+    # Production must reserve all possibly billed matrix elements BEFORE
+    # making a network call. Unknown/unreachable quota storage fails closed.
+    # Development/test direct calls preserve historical local test behavior.
+    if APP_ENV == "production" and not reserve_production_route_elements(len(eligible)):
         return result
 
     payload = {
