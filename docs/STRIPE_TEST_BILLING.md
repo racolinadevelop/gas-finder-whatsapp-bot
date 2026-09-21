@@ -5,8 +5,9 @@ The Stripe integration runs **only when explicitly enabled** and accepts only
 `user_subscriptions` (real/normal records): verified TEST payments update a
 separate PostgreSQL sandbox entitlement ledger. With the flag disabled, any
 sandbox Premium access is ignored. The current WhatsApp gas-station search
-remains free and unchanged. No real payment features or public self-service
-checkout have been activated.
+remains free and unchanged. Real payment features and public live Checkout
+have not been activated; optional WhatsApp-initiated TEST signup is described
+below.
 
 ## 1. Run automated tests with no Stripe account
 
@@ -86,7 +87,7 @@ https://docs.stripe.com/testing
    remain untouched. WhatsApp now offers a read-only **Mi plan / My plan** button at language
    selection and commands `mi plan` / `my plan` at any step. It reports the
    verified Free/Premium test status without changing the current search.
-   This status view is not a public payment flow or a Premium-only feature;
+   This status view is not a real payment flow or a Premium-only feature;
    the admin status endpoint remains the sandbox integration smoke check.
 7. Try `python scripts/stripe_sandbox_smoke.py portal` to obtain the
    authenticated user's Stripe TEST customer portal link. Cancel the
