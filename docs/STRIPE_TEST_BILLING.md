@@ -241,3 +241,44 @@ the location, fetched prices and computed routes are not persisted. The
 normal **free** gas-station search remains unchanged. Under the alternative
 HERE provider this Google-place-ID comparison is unavailable; it does not
 silently send HERE station IDs to Google.
+
+
+## One-tap Stripe **TEST** signup from WhatsApp (sandbox only)
+
+When `STRIPE_TEST_MODE_ENABLED=true` AND the additional explicit
+`STRIPE_TEST_WHATSAPP_LINKS_ENABLED=true` flag are configured in Railway,
+the localized **My plan / Mi plan** list offers **Try Premium / Probar
+Premium** to users with no active subscription. Clicking this option
+generates a *new, user-specific Stripe TEST Checkout Session on the server*,
+stores the Checkout Session ID ↔ hashed incoming WhatsApp sender association,
+then sends that sender a clickable Stripe-hosted HTTPS link privately in
+WhatsApp. No number, billing customer, price ID or feature entitlement can
+be chosen by typing into the chat or by editing the returned URL.
+The existing signed Stripe test webhook still re-queries current paid/active
+status; clicking the Checkout link or returning to the bot does not unlock
+Premium by itself. User coordinates, saved favorites and gas-search context
+remain unchanged; merely opening My plan or a Checkout link makes no Google
+Places/Routes calls.
+
+A repeated click on Try Premium for the same user reuses their existing open
+Checkout Session instead of creating another subscription. A completed
+Checkout awaiting webhook verification never triggers a second Checkout.
+The flow requires a shared per-sender Redis lock and fails closed if Redis
+is unavailable. A **verified already-canceled TEST subscription** can
+re-enroll on the same number after Stripe confirms cancellation: only its
+old test Checkout/entitlement binding is cleared; saved favorites and
+language are preserved. An active or unpaid/past-due linked account cannot
+buy a second subscription. Currently active sandbox subscribers see
+**Manage test plan / Gestionar prueba** instead, which creates a private
+Stripe TEST Billing Portal link for their linked customer.
+
+This is NOT an enablement of real payment processing or public onboarding.
+Stripe settings reject live secret keys and only accept test-mode webhook
+events. WhatsApp's current Meta test number can reach only allowlisted
+test recipients. The plan is still a TEST purchase: use Stripe test card
+details only, never a real card. Leave `STRIPE_TEST_WHATSAPP_LINKS_ENABLED`
+off until the trusted sandbox setup and UI are verified; the default is
+disabled. For production subscriptions we still need a distinct live-mode
+onboarding, clearly disclosed real price/renewal terms, billing acceptance
+tests and customer-support/cancellation process. Do not switch a TEST secret
+to a live key to bypass these steps.
