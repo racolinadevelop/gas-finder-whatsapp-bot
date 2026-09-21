@@ -1,6 +1,6 @@
 """Read-only, concise bilingual plan summary for a WhatsApp user's own account.
 
-Never send Checkout links; never change the active gas search session.
+Only describes plan status; a separate opt-in handler issues TEST links.
 """
 
 PLAN_SELECTION_ID = "account_plan"
