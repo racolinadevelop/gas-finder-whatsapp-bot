@@ -331,6 +331,86 @@ def build_main_menu_prompt(language: str, display_name: str | None = None) -> Li
     )
 
 
+
+def build_plan_navigation_prompt(language: str) -> ListPrompt:
+    """Follow the plan status with the same one-tap choices as other screens."""
+    es = language == "es"
+    return ListPrompt(
+        body_text="¿Qué deseas hacer ahora?" if es else "What would you like to do next?",
+        button_text="Opciones" if es else "Options",
+        section_title="Mi cuenta" if es else "My account",
+        rows=[
+            {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
+            {"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"},
+            {"id": "nav_language", "title": "🌐 Cambiar idioma" if es else "🌐 Change language"},
+            {"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"},
+        ],
+    )
+
+
+def build_favorites_navigation_prompt(
+    language: str, *, has_items: bool, premium: bool = True, show_view: bool = False
+) -> ListPrompt:
+    """Small actions view even when a user has no favorites or has Free."""
+    es = language == "es"
+    rows = [
+        {"id": "home_search", "title": "⛽ Buscar gasolineras" if es else "⛽ Find gas stations"},
+    ]
+    if premium and has_items and show_view:
+        rows.append({"id": "fav_list", "title": "⭐ Mis favoritas" if es else "⭐ My favorites"})
+    if premium and has_items:
+        rows.append({
+            "id": "fav_remove_menu",
+            "title": "🗑 Eliminar favorita" if es else "🗑 Remove a favorite",
+        })
+    if not premium:
+        rows.append({"id": "account_plan", "title": "👤 Mi plan" if es else "👤 My plan"})
+    rows.append({"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"})
+    return ListPrompt(
+        body_text="¿Qué deseas hacer ahora?" if es else "What would you like to do next?",
+        button_text="Opciones" if es else "Options",
+        section_title="Favoritas" if es else "Favorites",
+        rows=rows,
+    )
+
+
+def build_favorite_removal_prompt(
+    language: str, favorites: tuple, page: int = 1
+) -> ListPrompt:
+    """Five stable station choices per page, always <= WhatsApp's 10-row limit."""
+    from hashlib import sha256
+
+    es = language == "es"
+    if page not in (1, 2):
+        raise ValueError("Invalid favorite removal page")
+    start = (page - 1) * 5
+    rows = [
+        {
+            "id": "fav_delete_" + sha256(item.key.encode("utf-8")).hexdigest(),
+            "title": f"🗑 {start + index}. {item.name}"[:24],
+            "description": item.address[:72] if item.address else "",
+        }
+        for index, item in enumerate(favorites[start:start + 5], start=1)
+    ]
+    if page == 1 and len(favorites) > 5:
+        rows.append({"id": "fav_remove_page_2", "title": "➡️ Siguiente" if es else "➡️ Next"})
+    if page == 2:
+        rows.append({"id": "fav_remove_page_1", "title": "⬅️ Anterior" if es else "⬅️ Previous"})
+    rows.extend([
+        {"id": "fav_remove_back", "title": "⬅️ Mis favoritas" if es else "⬅️ My favorites"},
+        {"id": "nav_menu", "title": "🏠 Menú principal" if es else "🏠 Main menu"},
+    ])
+    return ListPrompt(
+        body_text=(
+            "Selecciona la gasolinera que deseas eliminar."
+            if es else "Choose the gas station to remove."
+        ),
+        button_text="Elegir favorita" if es else "Choose favorite",
+        section_title="Eliminar favoritas" if es else "Remove favorites",
+        rows=rows,
+    )
+
+
 def build_state_prompt(
     session: ConversationSession,
     error: bool = False,

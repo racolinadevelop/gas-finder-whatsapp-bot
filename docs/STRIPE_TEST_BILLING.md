@@ -186,3 +186,23 @@ returns to home. My favorites always checks the current server-side Premium
 entitlement, and basic station searching stays free. Singular requests like
 `mi favorita` / `my favorite` are accepted as synonyms for the list.
 No new Places or Routes API requests are made by language or menu actions.
+
+
+## One-tap navigation for account and favorites
+
+The `Mi plan / My plan` response now sends a concise status message followed by
+a WhatsApp list with **Find gas stations**, **My favorites**, **Change language**
+and **Main menu**. Before the first language selection it offers the language
+buttons instead. The `Mis favoritas / My favorites` response likewise sends
+a localized actions list, including a Remove option when there are saved
+favorites. Free users receive the Premium-access notice and a list that lets
+them continue searching or view their plan without typing.
+
+Remove opens a five-at-a-time picker (with Next/Previous when needed) for up to
+ten saved favorites. Each picker selection identifies a specific saved station
+rather than an index, so tapping an old picker cannot remove the station that
+later shifted into that position. Back returns to Favorites, and Menu always
+returns to the remembered-language home screen. Search from any account view
+starts the existing fuel-selection flow. None of these views requests new
+Google Places or Routes data, changes the stored language, or enables live
+Stripe billing.

@@ -6,10 +6,18 @@ import re
 def parse_favorite_action(
     text: str | None = None,
     selection_id: str | None = None,
-) -> tuple[str, int | None] | None:
+) -> tuple[str, int | str | None] | None:
     if selection_id:
-        if selection_id == "fav_list":
+        if selection_id in {"fav_list", "fav_remove_back"}:
             return ("list", None)
+        if selection_id == "fav_remove_menu":
+            return ("remove_menu", 1)
+        page = re.fullmatch(r"fav_remove_page_([12])", selection_id)
+        if page:
+            return ("remove_menu", int(page.group(1)))
+        target = re.fullmatch(r"fav_delete_([0-9a-f]{64})", selection_id)
+        if target:
+            return ("remove_key", target.group(1))
         match = re.fullmatch(r"fav_save_([1-5])", selection_id)
         if match:
             return ("save", int(match.group(1)))

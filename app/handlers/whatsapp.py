@@ -39,7 +39,12 @@ from app.presentation import (
     build_state_prompt,
 )
 from app.presentation.delivery import deliver_prompt
-from app.presentation.prompts import build_favorites_result_navigation_prompt
+from app.presentation.prompts import (
+    build_favorites_navigation_prompt,
+    build_favorite_removal_prompt,
+    build_plan_navigation_prompt,
+    build_favorites_result_navigation_prompt,
+)
 from app.routing.whatsapp_routers import build_whatsapp_routers
 from app.services.location_search import LocationSearchService
 from app.services.whatsapp import (
@@ -279,6 +284,42 @@ def apply_search_flow_decision(
     )
 
 
+def send_account_actions(sender: str, prompt: Prompt) -> None:
+    """These stand-alone lists include their own navigation in every state."""
+    try:
+        send_list_message(
+            to=sender,
+            body_text=prompt.body_text,
+            button_text=prompt.button_text,
+            section_title=prompt.section_title,
+            rows=prompt.rows,
+        )
+    except WhatsAppServiceError:
+        logger.warning("Could not deliver account actions")
+
+
+def handle_start_search(sender: str) -> None:
+    """A contextual Search button works from plan/favorites as well as home."""
+    current = conversation_store.get(sender)
+    if current is not None and current.state == ConversationState.WAITING_LANGUAGE:
+        send_state_prompt(sender, current)
+        return
+
+    language = load_saved_language(sender)
+    if language is None and current is not None and current.state not in {
+        ConversationState.NEW, ConversationState.WAITING_LANGUAGE,
+    }:
+        language = current.language
+    if language is None:
+        session = conversation_transitions.begin(sender)
+        send_state_prompt(sender, session)
+        return
+
+    conversation_transitions.resume(sender, language)
+    session = conversation_transitions.start_search(sender)
+    send_state_prompt(sender, session)
+
+
 def handle_plan_status(sender: str) -> None:
     """Show this WhatsApp sender's own plan without changing search state."""
     session = conversation_store.get(sender)
@@ -305,7 +346,11 @@ def handle_plan_status(sender: str) -> None:
             else "⚠️ Couldn't check your plan right now. Please try again."
         )
     send_text_message(to=sender, message=message)
-
+    if language in {"es", "en"}:
+        send_account_actions(sender, build_plan_navigation_prompt(language))
+    else:
+        # An explicit first-time language choice (or change) comes first.
+        send_language_prompt(sender, display_name=session.profile_name if session else None)
 
 
 def favorite_language(sender: str) -> str:
@@ -316,23 +361,25 @@ def favorite_language(sender: str) -> str:
 
 
 def handle_favorite_action(
-    sender: str, action: str, index: int | None,
+    sender: str, action: str, index: int | str | None,
     preferred_language: str | None = None,
 ) -> None:
-    """Operate only on the authenticated Meta webhook sender, never a supplied ID."""
+    """Every view and mutation checks this WhatsApp sender's current entitlement."""
     language = preferred_language or favorite_language(sender)
-    spanish = language == "es"
+    es = language == "es"
     try:
         if not subscription_service.can_use_feature(sender, Feature.FAVORITES):
-            send_text_message(
-                to=sender,
-                message=(
-                    "⭐ Guardar y consultar favoritas requiere Premium. "
-                    "La búsqueda de gasolineras sigue siendo gratis. "
-                    "Los pagos reales aún no están activados."
-                    if spanish else
-                    "⭐ Saving and viewing favorites requires Premium. "
-                    "Gas-station search stays free. Real payments are not enabled."
+            message = (
+                "⭐ Guardar y consultar favoritas requiere Premium. "
+                "La búsqueda de gasolineras sigue siendo gratis."
+                if es else
+                "⭐ Saving and viewing favorites requires Premium. "
+                "Gas-station search stays free."
+            )
+            send_text_message(to=sender, message=message)
+            send_account_actions(
+                sender, build_favorites_navigation_prompt(
+                    language, has_items=False, premium=False,
                 ),
             )
             return
@@ -340,79 +387,114 @@ def handle_favorite_action(
         if favorites_store is None:
             raise RuntimeError("Favorites storage is unavailable")
 
+        if action == "remove_menu":
+            favorites = favorites_store.list_favorites(sender)
+            if favorites:
+                page = index if index in (1, 2) else 1
+                if page == 2 and len(favorites) <= 5:
+                    page = 1
+                send_account_actions(
+                    sender, build_favorite_removal_prompt(language, favorites, page),
+                )
+                return
+            action = "list"
+
+        show_view = False
         if action == "list":
             favorites = favorites_store.list_favorites(sender)
             if not favorites:
                 message = (
-                    "⭐ Aún no tienes favoritas. Tras buscar gasolineras, "
-                    "elige «Guardar 1–5» para añadir una."
-                    if spanish else
-                    "⭐ You have no favorites yet. After a search, "
-                    "choose Save 1–5 to add one."
+                    "⭐ Aún no tienes favoritas. Busca gasolineras y elige "
+                    "«Guardar» junto a una de ellas."
+                    if es else
+                    "⭐ You have no favorites yet. Search for gas stations "
+                    "and choose Save next to one."
                 )
             else:
-                title = "⭐ Mis favoritas" if spanish else "⭐ My favorites"
-                lines = [title]
+                lines = ["⭐ Mis favoritas" if es else "⭐ My favorites"]
                 for position, station in enumerate(favorites, start=1):
                     address = f" — {station.address}" if station.address else ""
                     lines.append(f"{position}. {station.name}{address}")
-                lines.append(
-                    "Para quitar una: «eliminar favorita 1»."
-                    if spanish else
-                    "To remove one: “remove favorite 1”."
-                )
                 message = "\n".join(lines)
-        elif action == "save" and index is not None:
+        elif action == "save" and isinstance(index, int):
             chosen = favorites_store.add_from_recent(sender, index)
             message = (
-                f"⭐ Guardada: {chosen.name}. Escribe «mis favoritas» para ver tu lista."
-                if spanish else
-                f"⭐ Saved: {chosen.name}. Type “my favorites” to view your list."
+                f"⭐ Guardada: {chosen.name}."
+                if es else f"⭐ Saved: {chosen.name}."
             )
-        elif action == "remove" and index is not None:
+            favorites = favorites_store.list_favorites(sender)
+            show_view = True
+        elif action == "remove" and isinstance(index, int):
             chosen = favorites_store.remove_favorite(sender, index)
             message = (
                 f"✅ Eliminada: {chosen.name}."
-                if spanish else
-                f"✅ Removed: {chosen.name}."
+                if es else f"✅ Removed: {chosen.name}."
             )
+            favorites = favorites_store.list_favorites(sender)
+            show_view = bool(favorites)
+        elif action == "remove_key" and isinstance(index, str):
+            chosen = favorites_store.remove_by_digest(sender, index)
+            message = (
+                f"✅ Eliminada: {chosen.name}."
+                if es else f"✅ Removed: {chosen.name}."
+            )
+            favorites = favorites_store.list_favorites(sender)
+            show_view = bool(favorites)
         else:
             return
+
+        send_text_message(to=sender, message=message)
+        send_account_actions(
+            sender, build_favorites_navigation_prompt(
+                language, has_items=bool(favorites), show_view=show_view,
+            ),
+        )
     except FavoriteStoreError as exc:
-        reason = str(exc)
-        if reason == "no_recent_result":
+        if str(exc) == "no_recent_result":
             message = (
-                "Busca gasolineras primero y elige el número mostrado más reciente."
-                if spanish else
-                "Search for gas stations first and choose a number from the latest results."
+                "Busca gasolineras primero y elige una de las opciones Guardar."
+                if es else "Search for gas stations and choose a Save option first."
             )
-        elif reason == "limit":
+        elif str(exc) == "limit":
             message = (
                 "Has llegado al límite de 10 favoritas. "
-                "Escribe «mis favoritas» y elimina una antes de guardar otra."
-                if spanish else
-                "You've reached the 10-favorite limit. "
-                "Type “my favorites” and remove one before saving another."
+                "Elimina una antes de guardar otra."
+                if es else
+                "You've reached the 10-favorite limit. Remove one before saving another."
             )
         else:
             message = (
-                "No encontré esa favorita. Escribe «mis favoritas» para ver los números."
-                if spanish else
-                "I couldn't find that favorite. Type “my favorites” for the numbers."
+                "Esa favorita ya no está disponible. Consulta tu lista actual."
+                if es else "That favorite is no longer available. Check your current list."
             )
+        try:
+            send_text_message(to=sender, message=message)
+            # Refreshing the list avoids asking the user to type after a stale tap.
+            handle_favorite_action(sender, "list", None, preferred_language=language)
+        except WhatsAppServiceError:
+            logger.warning("Could not deliver favorite action error")
+    except WhatsAppServiceError:
+        # The mutation may already be committed. Do not retry the same button:
+        # a user must intentionally select another action.
+        logger.warning("Could not deliver favorite action acknowledgement")
     except Exception:
         logger.warning("Could not process favorite action")
-        message = (
-            "⚠️ No pude actualizar tus favoritas ahora. Inténtalo de nuevo."
-            if spanish else
-            "⚠️ Couldn't update favorites right now. Please try again."
-        )
-    try:
-        send_text_message(to=sender, message=message)
-    except WhatsAppServiceError:
-        # A remove already committed to the store. Retrying the same message
-        # could remove the NEXT numbered favorite. Never replay that mutation.
-        logger.warning("Could not deliver favorite action acknowledgement")
+        try:
+            send_text_message(
+                to=sender,
+                message=(
+                    "⚠️ No pude consultar tus favoritas ahora. Inténtalo de nuevo."
+                    if es else
+                    "⚠️ Couldn't open your favorites right now. Please try again."
+                ),
+            )
+            send_account_actions(
+                sender, build_favorites_navigation_prompt(
+                    language, has_items=False, premium=False,
+                ),
+            )
+        except WhatsAppServiceError:
+            logger.warning("Could not deliver favorites failure prompt")
 
 
 def save_recent_if_premium(
@@ -463,6 +545,7 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         send_expected=send_expected_prompt,
         show_plan=handle_plan_status,
         show_favorite=handle_favorite_action,
+        start_search=handle_start_search,
     )
 
 
