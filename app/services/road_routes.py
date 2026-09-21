@@ -10,7 +10,8 @@ import math
 
 import httpx
 
-from app.config import GOOGLE_MAPS_API_KEY, ROUTES_MAX_DESTINATIONS
+from app.config import APP_ENV, GOOGLE_MAPS_API_KEY, ROUTES_MAX_DESTINATIONS
+from app.services.route_budget import reserve_production_route_elements
 from app.utils.cost import calculate_estimated_cost
 
 logger = logging.getLogger(__name__)
@@ -51,8 +52,14 @@ def add_road_routes(
         for index, station in enumerate(stations)
         if station.get("latitude") is not None
         and station.get("longitude") is not None
-    ][:max_destinations]
+    ][:min(max_destinations, 5)]
     if not eligible:
+        return result
+
+    # Production must reserve all possibly billed matrix elements BEFORE
+    # making a network call. Unknown/unreachable quota storage fails closed.
+    # Development/test direct calls preserve historical local test behavior.
+    if APP_ENV == "production" and not reserve_production_route_elements(len(eligible)):
         return result
 
     payload = {
