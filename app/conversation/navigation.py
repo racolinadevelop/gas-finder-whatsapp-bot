@@ -50,6 +50,8 @@ PREVIOUS_STATES = {
     ),
     ConversationState.WAITING_LOCATION: ConversationState.WAITING_DISTANCE,
     ConversationState.WAITING_RESULTS: ConversationState.WAITING_LOCATION,
+    ConversationState.WAITING_FAVORITES_LOCATION: ConversationState.WAITING_FAVORITES_FUEL,
+    ConversationState.WAITING_FAVORITES_FUEL: ConversationState.MAIN_MENU,
 }
 
 
