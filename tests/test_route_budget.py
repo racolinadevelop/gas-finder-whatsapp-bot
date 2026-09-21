@@ -107,6 +107,7 @@ def test_invalid_or_oversize_reservations_do_not_change_counters(bad):
 def test_prod_routes_request_is_skipped_without_budget_or_redis(monkeypatch):
     outbound = []
     monkeypatch.setattr(road_routes, "APP_ENV", "production")
+    monkeypatch.setattr(road_routes, "ROUTES_API_ENABLED", True)
     monkeypatch.setattr(
         road_routes, "reserve_production_route_elements",
         lambda count: outbound.append(("reserve", count)) or False,
@@ -125,6 +126,7 @@ def test_prod_routes_request_is_skipped_without_budget_or_redis(monkeypatch):
 def test_prod_routes_reserves_actual_eligible_elements_before_one_request(monkeypatch):
     outbound = []
     monkeypatch.setattr(road_routes, "APP_ENV", "production")
+    monkeypatch.setattr(road_routes, "ROUTES_API_ENABLED", True)
     monkeypatch.setattr(
         road_routes, "reserve_production_route_elements",
         lambda count: outbound.append(("reserve", count)) or True,
@@ -154,3 +156,20 @@ def test_production_budget_failure_closed_if_redis_unreachable(monkeypatch):
     assert not reserve_production_route_elements(5)
     monkeypatch.setattr(guard, "REDIS_URL", None)
     assert not reserve_production_route_elements(1)
+
+
+def test_production_kill_switch_blocks_routes_even_when_budget_allows(monkeypatch):
+    monkeypatch.setattr(road_routes, "APP_ENV", "production")
+    monkeypatch.setattr(road_routes, "ROUTES_API_ENABLED", False)
+    monkeypatch.setattr(
+        road_routes, "reserve_production_route_elements",
+        lambda _: pytest.fail("Disabled Routes must not consume a reservation"),
+    )
+    monkeypatch.setattr(
+        road_routes.httpx, "post",
+        lambda *a, **k: pytest.fail("Disabled Routes must not make a request"),
+    )
+    original = places(5)
+    assert road_routes.add_road_routes(
+        original, latitude=38.25, longitude=-85.75, api_key="fake"
+    ) is original
