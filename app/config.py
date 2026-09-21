@@ -95,6 +95,20 @@ ROUTES_MAX_DESTINATIONS = positive_int_setting("ROUTES_MAX_DESTINATIONS", 5)
 if ROUTES_MAX_DESTINATIONS > 5:
     raise RuntimeError("ROUTES_MAX_DESTINATIONS must be between 1 and 5")
 
+# Budget is based on billable matrix elements, NOT on HTTP request count.
+# Defaults deliberately conservative for initial user testing. UTC calendar
+# daily/monthly counters are shared by all production workers through Redis.
+ROUTES_DAILY_ELEMENT_LIMIT = positive_int_setting(
+    "ROUTES_DAILY_ELEMENT_LIMIT", 25
+)
+ROUTES_MONTHLY_ELEMENT_LIMIT = positive_int_setting(
+    "ROUTES_MONTHLY_ELEMENT_LIMIT", 150
+)
+if ROUTES_DAILY_ELEMENT_LIMIT > ROUTES_MONTHLY_ELEMENT_LIMIT:
+    raise RuntimeError(
+        "ROUTES_DAILY_ELEMENT_LIMIT must not exceed ROUTES_MONTHLY_ELEMENT_LIMIT"
+    )
+
 if GAS_STATION_PROVIDER not in {"google", "here"}:
     raise RuntimeError("GAS_STATION_PROVIDER must be 'google' or 'here'")
 
