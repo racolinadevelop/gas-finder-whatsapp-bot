@@ -54,8 +54,14 @@ def add_road_routes(
     eligible = [
         (index, station)
         for index, station in enumerate(stations)
-        if station.get("latitude") is not None
-        and station.get("longitude") is not None
+        if isinstance(station.get("latitude"), (int, float))
+        and not isinstance(station["latitude"], bool)
+        and math.isfinite(station["latitude"])
+        and -90 <= station["latitude"] <= 90
+        and isinstance(station.get("longitude"), (int, float))
+        and not isinstance(station["longitude"], bool)
+        and math.isfinite(station["longitude"])
+        and -180 <= station["longitude"] <= 180
     ][:min(max_destinations, 5)]
     if not eligible:
         return result
