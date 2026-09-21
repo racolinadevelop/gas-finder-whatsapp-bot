@@ -962,7 +962,6 @@ def test_cancelled_premium_blocks_comparison_even_after_location_prompt(bot, mon
     bot.text("hola")
     bot.button("lang_es")
     bot.button("fav_compare", kind="list_reply")
-    bot.button("fav_compare_page_1", kind="list_reply")
     bot.button("fav_fuel_regular", kind="list_reply")
     assert handler.conversation_store.get(SENDER).state == (
         ConversationState.WAITING_FAVORITES_LOCATION
@@ -999,7 +998,6 @@ def test_compare_favorites_rate_limit_and_back_keep_normal_search_free(bot, monk
     bot.text("hola")
     bot.button("lang_en")
     bot.button("fav_compare", kind="list_reply")
-    bot.button("fav_compare_page_1", kind="list_reply")
     bot.sent.clear()
     bot.button("nav_back", kind="list_reply")
     bot.assert_sent("text", "list")  # Back from fuel returns to saved favorites.
@@ -1007,7 +1005,6 @@ def test_compare_favorites_rate_limit_and_back_keep_normal_search_free(bot, monk
     bot.sent.clear()
 
     bot.button("fav_compare", kind="list_reply")
-    bot.button("fav_compare_page_1", kind="list_reply")
     bot.button("fav_fuel_premium", kind="list_reply")
     bot.sent.clear()
     bot.location()
