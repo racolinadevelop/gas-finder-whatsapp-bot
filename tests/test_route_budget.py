@@ -6,7 +6,29 @@ import pytest
 
 from app.services.route_budget import RouteBudget, reserve_production_route_elements
 from app.services import road_routes
-from tests.test_road_routes import FakeResponse, places
+import httpx
+
+
+def places(count=5):
+    return {"stations": [
+        {"latitude": 38.25 + i / 1000, "longitude": -85.75 - i / 1000}
+        for i in range(count)
+    ]}
+
+
+class FakeResponse:
+    def __init__(self, body):
+        self._body = body
+        self.response = httpx.Response(
+            200, json=body,
+            request=httpx.Request("POST", "https://routes.googleapis.com/"),
+        )
+
+    def raise_for_status(self):
+        self.response.raise_for_status()
+
+    def json(self):
+        return self._body
 
 
 class FakeRedis:
