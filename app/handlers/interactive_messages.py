@@ -23,7 +23,8 @@ def process_interactive_message(
     dispatch_state_interactive: Callable[[IncomingMessage, ConversationSession], bool],
     send_expected: Callable[[str, ConversationSession], None],
     show_plan: Callable[[str], None] | None = None,
-    show_favorite: Callable[[str, str, int | None], None] | None = None,
+    show_favorite: Callable[[str, str, int | str | None], None] | None = None,
+    start_search: Callable[[str], None] | None = None,
 ) -> None:
     """Prioritize global navigation and reject stale language buttons."""
     sender = incoming_message.sender
@@ -32,6 +33,10 @@ def process_interactive_message(
 
     if navigation_action is not None:
         navigate(sender, navigation_action)
+        return
+
+    if button_id == "home_search" and start_search is not None:
+        start_search(sender)
         return
 
     if button_id == PLAN_SELECTION_ID and show_plan is not None:
