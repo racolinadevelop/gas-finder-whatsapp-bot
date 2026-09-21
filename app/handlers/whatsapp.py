@@ -729,6 +729,8 @@ def handle_interactive_message(incoming_message: IncomingMessage) -> None:
         show_plan=handle_plan_status,
         show_favorite=handle_favorite_action,
         start_search=handle_start_search,
+        create_test_checkout=handle_test_checkout,
+        manage_test_subscription=handle_test_portal,
     )
 
 
