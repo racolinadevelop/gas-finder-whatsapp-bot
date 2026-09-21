@@ -663,3 +663,172 @@ def test_active_legacy_chat_language_is_saved_without_repeating_language_screen(
     assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
     assert handler.user_language_store.get(SENDER) == "es"
     assert bot.searches == []
+
+
+def test_account_views_have_buttons_and_search_is_one_tap_from_any_state(bot, monkeypatch):
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+    monkeypatch.setattr(
+        handler, "subscription_service",
+        SubscriptionService(InMemorySubscriptionStore()),
+    )
+    bot.text("hola")
+    bot.button("lang_es")
+    bot.sent.clear()
+
+    bot.button("account_plan", kind="list_reply")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["home_search", "fav_list", "nav_language", "nav_menu"])
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+
+    bot.sent.clear()
+    bot.button("fav_list", kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert "requiere Premium" in bot.sent[0][1]["message"]
+    bot.assert_last_list(["home_search", "account_plan", "nav_menu"])
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+
+    bot.sent.clear()
+    bot.button("home_search", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list(["fuel_regular", "fuel_premium", "fuel_diesel",
+                          "nav_back", "nav_menu"])
+    session = handler.conversation_store.get(SENDER)
+    assert session.state == ConversationState.WAITING_FUEL
+    assert bot.searches == []
+
+    bot.sent.clear()
+    bot.button("account_plan", kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert handler.conversation_store.get(SENDER) == session
+
+    bot.sent.clear()
+    bot.button("nav_menu", kind="list_reply")
+    bot.assert_sent("list")
+    bot.assert_last_list(["home_search", "fav_list", "account_plan", "nav_language"])
+    assert handler.conversation_store.get(SENDER).language == "es"
+
+
+def test_favorites_empty_saved_and_remove_menu_use_one_tap_choices(bot, monkeypatch):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    store = InMemoryFavoriteStore()
+    monkeypatch.setattr(handler, "favorites_store", store)
+    subscription = SubscriptionService(InMemorySubscriptionStore())
+    subscription.activate_premium(SENDER)
+    monkeypatch.setattr(handler, "subscription_service", subscription)
+
+    bot.text("hola")
+    bot.button("lang_es")
+    bot.sent.clear()
+    bot.button("fav_list", kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert "Aún no tienes favoritas" in bot.sent[0][1]["message"]
+    bot.assert_last_list(["home_search", "nav_menu"])
+
+    # Save a station from the existing displayed results; no provider calls.
+    items = shown_stations([{
+        "id": "example-place", "name": "Station Example",
+        "address": "100 Main St",
+    }])
+    store.record_results(SENDER, items)
+    bot.sent.clear()
+    bot.button("fav_save_1", kind="list_reply")
+    bot.assert_sent("text", "list")
+    bot.assert_last_list(["home_search", "fav_list", "fav_remove_menu", "nav_menu"])
+    assert len(bot.searches) == 0
+
+    bot.sent.clear()
+    bot.button("fav_list", kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert "Station Example" in bot.sent[0][1]["message"]
+    bot.assert_last_list(["home_search", "fav_remove_menu", "nav_menu"])
+
+    bot.sent.clear()
+    bot.button("fav_remove_menu", kind="list_reply")
+    bot.assert_sent("list")
+    button_ids = [row["id"] for row in bot.sent[-1][1]["rows"]]
+    assert len(button_ids) == 3
+    assert button_ids[-2:] == ["fav_remove_back", "nav_menu"]
+    selected = button_ids[0]
+    assert selected.startswith("fav_delete_")
+    assert handler.conversation_store.get(SENDER).state == ConversationState.MAIN_MENU
+
+    bot.sent.clear()
+    bot.button("fav_remove_back", kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert store.list_favorites(SENDER) == items
+
+    bot.sent.clear()
+    bot.button("fav_remove_menu", kind="list_reply")
+    bot.button(selected, kind="list_reply")
+    assert "Eliminada" in bot.sent[-2][1]["message"]
+    assert store.list_favorites(SENDER) == ()
+    bot.assert_last_list(["home_search", "nav_menu"])
+
+    # A stale button refers to the old station and cannot remove another one.
+    store.record_results(SENDER, shown_stations([{
+        "id": "other-place", "name": "Other Station", "address": "200 Main St",
+    }]))
+    store.add_from_recent(SENDER, 1)
+    bot.sent.clear()
+    bot.button(selected, kind="list_reply")
+    assert store.list_favorites(SENDER)[0].name == "Other Station"
+    assert "ya no está disponible" in bot.sent[0][1]["message"]
+
+
+def test_favorite_removal_pagination_and_revoked_access(bot, monkeypatch):
+    from app.favorites import InMemoryFavoriteStore, shown_stations
+    from app.subscriptions import InMemorySubscriptionStore, SubscriptionService
+
+    class Ledger:
+        active = True
+
+        def has_premium_access(self, sender):
+            assert sender == SENDER
+            return self.active
+
+    ledger = Ledger()
+    store = InMemoryFavoriteStore()
+    monkeypatch.setattr(handler, "favorites_store", store)
+    monkeypatch.setattr(
+        handler, "subscription_service",
+        SubscriptionService(InMemorySubscriptionStore(), test_entitlements=ledger),
+    )
+    for index in range(10):
+        store.record_results(SENDER, shown_stations([{
+            "id": f"place-{index}", "name": f"Station {index}",
+            "address": f"{index} Main Street",
+        }]))
+        store.add_from_recent(SENDER, 1)
+
+    bot.text("hola")
+    bot.button("lang_en")
+    bot.sent.clear()
+    bot.button("fav_remove_menu", kind="list_reply")
+    bot.assert_sent("list")
+    first_page = [row["id"] for row in bot.sent[-1][1]["rows"]]
+    assert len(first_page) == 8
+    assert first_page[-3:] == ["fav_remove_page_2", "fav_remove_back", "nav_menu"]
+
+    bot.sent.clear()
+    bot.button("fav_remove_page_2", kind="list_reply")
+    bot.assert_sent("list")
+    second_page = [row["id"] for row in bot.sent[-1][1]["rows"]]
+    assert len(second_page) == 8
+    assert second_page[-3:] == ["fav_remove_page_1", "fav_remove_back", "nav_menu"]
+    chosen = second_page[0]
+
+    ledger.active = False
+    bot.sent.clear()
+    bot.button(chosen, kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert "requires Premium" in bot.sent[0][1]["message"]
+    assert len(store.list_favorites(SENDER)) == 10
+
+    ledger.active = True
+    bot.sent.clear()
+    bot.button(chosen, kind="list_reply")
+    bot.assert_sent("text", "list")
+    assert "Removed: Station 5" in bot.sent[0][1]["message"]
+    assert len(store.list_favorites(SENDER)) == 9
