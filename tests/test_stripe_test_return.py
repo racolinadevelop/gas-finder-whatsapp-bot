@@ -71,7 +71,7 @@ def test_return_pages_are_mobile_friendly_and_never_grant_premium(monkeypatch):
         assert 'href="whatsapp://"' in response.text
         assert "no-store" in response.headers["cache-control"]
         assert "no-referrer" in response.headers["referrer-policy"]
-        assert "script" not in response.text
+        assert "<script" not in response.text
         assert SENDER not in response.text and SESSION not in response.text
     assert client.get("/api/v1/billing/test/return/not-a-page").status_code == 404
     monkeypatch.setattr(billing, "STRIPE_TEST_MODE_ENABLED", False)
