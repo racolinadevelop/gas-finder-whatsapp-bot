@@ -212,6 +212,60 @@ def begin_checkout(client):
     }
 
 
+def test_signed_paid_webhook_pushes_one_notice_only_after_entitlement(sandbox, monkeypatch):
+    from app.billing import whatsapp_receipts
+
+    client, ledger, gateway, db = sandbox
+
+    class Redis:
+        def __init__(self):
+            self.data = {}
+        def set(self, key, value, *, ex=None, nx=False):
+            if nx and key in self.data:
+                return False
+            self.data[key] = value
+            return True
+        def get(self, key):
+            return self.data.get(key)
+
+    redis = Redis()
+    sent = []
+    begin_checkout(client)
+    whatsapp_receipts.remember_test_checkout_recipient(
+        USER, SESSION, redis_client=redis,
+    )
+
+    def notify(event, *, store):
+        return whatsapp_receipts.send_verified_test_premium_notice(
+            event, store=store, redis_client=redis,
+            send_message=lambda **kw: sent.append(kw),
+        )
+
+    monkeypatch.setattr(billing, "send_verified_test_premium_notice", notify)
+    # Returning from Stripe's browser page cannot activate Premium.
+    assert client.get("/api/v1/billing/test/return/success").status_code == 200
+    assert not ledger.has_premium_access(USER)
+    # Signature failures never send a message.
+    body, headers = signed_event("evt_receipt_invalid")
+    headers["Stripe-Signature"] = "t=1,v1=invalid"
+    assert client.post(WEBHOOK, content=body, headers=headers).status_code == 400
+    assert sent == []
+
+    gateway.complete_payment()
+    response = send_event(client, "evt_receipt_paid")
+    assert response.status_code == 200 and response.json()["applied"]
+    assert ledger.has_premium_access(USER)
+    assert [s["to"] for s in sent] == [USER]
+
+    duplicate = send_event(client, "evt_receipt_paid")
+    assert duplicate.status_code == 200 and not duplicate.json()["applied"]
+    assert len(sent) == 1
+    other_event = send_event(client, "evt_receipt_invoice", event_type="invoice.paid",
+                             object_id="in_test_123", extra_object={"subscription": SUBSCRIPTION})
+    assert other_event.status_code == 200
+    assert len(sent) == 1
+
+
 def test_authenticated_checkout_creates_immutable_binding_without_entitlement(sandbox):
     client, ledger, gateway, db = sandbox
     assert client.post(
