@@ -283,3 +283,41 @@ disabled. For production subscriptions we still need a distinct live-mode
 onboarding, clearly disclosed real price/renewal terms, billing acceptance
 tests and customer-support/cancellation process. Do not switch a TEST secret
 to a live key to bypass these steps.
+
+
+## Stripe TEST browser return and WhatsApp confirmation
+
+New Stripe TEST Checkout sessions now redirect to the Gas Finder
+`/api/v1/billing/test/return/success` page instead of the root API JSON;
+Checkout cancellation and Billing Portal return have their own friendly pages.
+Each page offers **Abrir WhatsApp / Open WhatsApp**, plus instructions to use
+the in-app browser's **WhatsApp / Back** navigation if the button does not
+switch apps. On iOS and Android a payment website cannot reliably close
+WhatsApp's built-in browser or forcibly reload its chat; the button is a
+best-effort deep link. The redirect is static, anonymous and **never** grants
+Premium, displays account status or promises that payment succeeded.
+
+For a TEST Checkout **started from WhatsApp after this deployment**, the
+server temporarily stores the verified incoming WhatsApp sender in Redis
+under a hashed Checkout-ID key, for a maximum of 22 hours; the short-lived
+raw sender is not persisted in PostgreSQL or embedded in the redirect URL.
+After a *valid signed Stripe TEST webhook* authoritatively verifies the
+bound Checkout's paid, active entitlement, the bot sends **one** WhatsApp
+activation notice to that original sender (best effort, only within the
+customer-service window). Replayed webhooks and invoice renewals do not
+send duplicate signup notices. Redis or WhatsApp delivery failures never
+change entitlement; the user can always return to **Mi plan / My plan**.
+
+**Existing already-created Checkout/Portal sessions keep their original
+redirects, and completed sessions from before this update cannot receive a
+retroactive notification.** A newly generated Checkout/Portal URL is needed
+to test the new browser return pages. Do not cancel a paid subscription just
+to check a cosmetic redirect; test with a new eligible TEST enrollment.
+
+Railway TEST-only redirect settings:
+
+```dotenv
+STRIPE_TEST_SUCCESS_URL=https://YOUR_RAILWAY_DOMAIN/api/v1/billing/test/return/success
+STRIPE_TEST_CANCEL_URL=https://YOUR_RAILWAY_DOMAIN/api/v1/billing/test/return/cancel
+STRIPE_TEST_PORTAL_RETURN_URL=https://YOUR_RAILWAY_DOMAIN/api/v1/billing/test/return/account
+```
