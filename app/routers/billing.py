@@ -17,6 +17,8 @@ from app.billing import (
 )
 from app.billing.test_reconciliation import StripeTestReconciler
 from app.billing.test_store import TestBillingStoreError
+from app.billing.return_pages import stripe_test_return_page
+from app.billing.whatsapp_receipts import send_verified_test_premium_notice
 from app.config import (
     STRIPE_TEST_MODE_ENABLED,
     STRIPE_TEST_SECRET_KEY,
@@ -183,6 +185,15 @@ def get_test_subscription_status(payload: BillingUserRequest):
     }
 
 
+@router.get("/return/{kind}", include_in_schema=False)
+def stripe_test_browser_return(kind: str):
+    """Friendly browser return, never an authentication or entitlement signal."""
+    _require_test_mode()
+    if kind not in {"success", "cancel", "account"}:
+        raise HTTPException(status_code=404, detail="Page not found.")
+    return stripe_test_return_page(kind)
+
+
 @router.post("/webhook")
 async def receive_test_stripe_webhook(request: Request):
     _require_test_mode()
@@ -200,11 +211,16 @@ async def receive_test_stripe_webhook(request: Request):
         ) from exc
 
     try:
-        applied = StripeTestReconciler(gateway, _store()).reconcile(event)
+        store = _store()
+        applied = StripeTestReconciler(gateway, store).reconcile(event)
     except (StripeTestError, TestBillingStoreError) as exc:
         # Stripe retries a 5xx event after transient API/database failures.
         # Never trust the event snapshot or mark it processed on failures.
         raise HTTPException(
             status_code=503, detail="Test billing verification unavailable."
         ) from exc
+    if applied:
+        # Delivery is optional and idempotent. A failure sending a WhatsApp
+        # receipt must never make Stripe retry an already committed payment.
+        send_verified_test_premium_notice(event, store=store)
     return {"received": True, "applied": applied}

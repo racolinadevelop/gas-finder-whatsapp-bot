@@ -18,6 +18,7 @@ from app.config import (
     STRIPE_TEST_PORTAL_RETURN_URL,
 )
 from app.persistence.redis_client import build_redis_client
+from app.billing.whatsapp_receipts import remember_test_checkout_recipient
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,9 @@ def create_sender_checkout(
                     url = current.get("url")
                     if not _is_stripe_test_url(url):
                         raise WhatsAppTestCheckoutError("unavailable")
+                    remember_test_checkout_recipient(
+                        sender, pending, redis_client=client,
+                    )
                     return url
                 if current.get("status") != "expired":
                     # Completed but webhook not reconciled: do not offer
@@ -125,6 +129,9 @@ def create_sender_checkout(
             if not _is_stripe_test_url(url) or not result.get("session_id", "").startswith("cs_test_"):
                 raise WhatsAppTestCheckoutError("unavailable")
             store.save_checkout(result["session_id"], sender)
+            remember_test_checkout_recipient(
+                sender, result["session_id"], redis_client=client,
+            )
             return url
     except WhatsAppTestCheckoutError:
         raise
